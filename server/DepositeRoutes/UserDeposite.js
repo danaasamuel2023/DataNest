@@ -5,7 +5,7 @@ const axios = require('axios');
 const crypto = require('crypto');
 
 // Paystack configuration
-const PAYSTACK_SECRET_KEY = 'sk_live_56a5fa6fc178c1cbbbed6d650682eb89c9b5cf4f'; 
+const PAYSTACK_SECRET_KEY = 'sk_live_9738959346434238db2b3c5ab75cbd73f17ae48d'; 
 const PAYSTACK_BASE_URL = 'https://api.paystack.co';
 
 // Initiate Deposit
@@ -68,7 +68,7 @@ router.post('/deposit', async (req, res) => {
         amount: paystackAmount, // Convert to pesewas (smallest currency unit for GHS)
         currency: 'GHS',
         reference,
-        callback_url: `https://www.dataspot.store/payment/callback?reference=${reference}`
+        callback_url: `https://www.datanestgh.com/payment/callback?reference=${reference}`
       },
       {
         headers: {
