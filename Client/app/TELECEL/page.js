@@ -375,7 +375,7 @@ const TelecelBundleSelect = () => {
 
     try {
       const token = localStorage.getItem('authToken');
-      const response = await fetch('https://kingpromise.onrender.com/api/v1/data/purchase-data', {
+      const response = await fetch('https://datanest-lkyu.onrender.com/api/v1/data/purchase-data', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

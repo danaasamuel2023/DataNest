@@ -20,7 +20,7 @@ import {
   ChevronRight
 } from 'lucide-react';
 
-const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://kingpromise.onrender.com/api/v1';
+const API_BASE_URL = process.env.REACT_APP_API_URL || 'https://datanest-lkyu.onrender.com/api/v1';
 
 const DataSpotDeposit = () => {
   // States

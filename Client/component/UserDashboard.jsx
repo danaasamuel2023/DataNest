@@ -135,7 +135,7 @@ const DashboardPage = () => {
       setLoading(true);
       const authToken = localStorage.getItem('authToken');
       
-      const response = await fetch(`https://kingpromise.onrender.com/api/v1/data/user-dashboard/${userId}`, {
+      const response = await fetch(`https://datanest-lkyu.onrender.com/api/v1/data/user-dashboard/${userId}`, {
         headers: {
           'Authorization': `Bearer ${authToken}`
         }

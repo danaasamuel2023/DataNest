@@ -31,7 +31,7 @@ function PaymentCallbackClient() {
       const verifyPayment = async () => {
         try {
           // Call your backend to verify the payment status
-          const response = await axios.get(`https://kingpromise.onrender.com/api/v1/verify-payment?reference=${reference}`);
+          const response = await axios.get(`https://datanest-lkyu.onrender.com/api/v1/verify-payment?reference=${reference}`);
           
           if (response.data.success) {
             setStatus('success');
