@@ -127,7 +127,7 @@ function PaymentCallbackClient() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
             <div className="flex items-center">
-              <h1 className="text-2xl font-bold text-gray-900">DataSpot</h1>
+              <h1 className="text-2xl font-bold text-gray-900">DataNest</h1>
             </div>
             <div className="flex items-center space-x-4">
               <span className="text-sm text-gray-500">Payment Verification</span>
@@ -208,7 +208,7 @@ function PaymentCallbackClient() {
                 {(status === 'failed' || status === 'pending') && (
                   <div className="text-center">
                     <a 
-                      href="mailto:support@dataspot.com" 
+                      href="mailto:support@datanest.com" 
                       className="text-sm text-blue-600 hover:text-blue-700 font-medium"
                     >
                       Contact Support
@@ -227,8 +227,8 @@ function PaymentCallbackClient() {
             <div className="text-sm text-gray-600">
               <p className="font-medium mb-1">Need Help?</p>
               <p>If you're experiencing issues with your payment, please contact our support team at{' '}
-                <a href="mailto:support@dataspot.com" className="text-blue-600 hover:text-blue-700 font-medium">
-                  support@dataspot.com
+                <a href="mailto:support@datanest.com" className="text-blue-600 hover:text-blue-700 font-medium">
+                  support@datanest.com
                 </a>
               </p>
             </div>
