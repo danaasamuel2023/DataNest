@@ -11,35 +11,18 @@ import {
   PlusCircle, 
   User, 
   BarChart2, 
-  ChevronDown, 
-  ChevronUp, 
   Clock, 
-  Eye, 
-  Globe, 
   Activity, 
-  ArrowUpRight, 
-  Shield, 
+  ArrowRight, 
   Info, 
-  Timer, 
-  CheckCircle,
-  Home,
-  FileText,
-  HelpCircle,
-  Settings,
-  Moon,
-  Sun,
-  Zap,
-  ArrowDownRight,
-  Menu,
-  Sparkles
+  Timer 
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
 
 const DashboardPage = () => {
   const router = useRouter();
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
   const [userName, setUserName] = useState('');
-  const [darkMode, setDarkMode] = useState(false);
   const [stats, setStats] = useState({
     balance: 0,
     todayOrders: 0,
@@ -48,32 +31,174 @@ const DashboardPage = () => {
     recentTransactions: []
   });
   
-  const [animateStats, setAnimateStats] = useState(false);
-  const [showNotice, setShowNotice] = useState(true);
+  const [startAnimation, setStartAnimation] = useState(false);
+  const [displayNotice, setDisplayNotice] = useState(true);
+  
+  // Network inventory state
+  const [networkInventory, setNetworkInventory] = useState({
+    mtn: { inStock: true, loading: true, lastChecked: null },
+    airteltigo: { inStock: true, loading: true, lastChecked: null },
+    telecel: { inStock: true, loading: true, lastChecked: null }
+  });
 
-  useEffect(() => {
-    const savedDarkMode = localStorage.getItem('darkMode');
-    if (savedDarkMode === 'true') {
-      setDarkMode(true);
-    } else if (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches) {
-      setDarkMode(true);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (darkMode) {
-      document.documentElement.classList.add('dark');
-    } else {
-      document.documentElement.classList.remove('dark');
-    }
-    localStorage.setItem('darkMode', darkMode.toString());
-  }, [darkMode]);
-
-  const toggleDarkMode = () => {
-    setDarkMode(!darkMode);
+  const goToTopup = () => {
+    router.push('/topup');
   };
 
-  const formatCurrency = (value) => {
+  const goToNetwork = (network) => {
+    const inventoryKey = network.toLowerCase();
+    if (!networkInventory[inventoryKey]?.inStock) {
+      alert(`${network.toUpperCase()} bundles are currently out of stock. Please try another network.`);
+      return;
+    }
+    
+    const routes = {
+      'mtn': '/mtnup2u',
+      'airteltigo': '/at-ishare',
+      'telecel': '/TELECEL'
+    };
+    router.push(routes[network] || '/');
+  };
+
+  // Check inventory for all networks
+  const checkNetworkInventory = async () => {
+    const networks = [
+      { key: 'mtn', apiName: 'YELLO' },
+      { key: 'airteltigo', apiName: 'AT_PREMIUM' },
+      { key: 'telecel', apiName: 'TELECEL' }
+    ];
+
+    for (const network of networks) {
+      try {
+        console.log(`🔍 Checking ${network.key.toUpperCase()} inventory...`);
+        
+        const response = await fetch(`https://api.datamartgh.shop/api/inventory/check/${network.apiName}`);
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+          const { inStock } = data.data;
+          
+          setNetworkInventory(prev => ({
+            ...prev,
+            [network.key]: {
+              inStock,
+              loading: false,
+              lastChecked: new Date()
+            }
+          }));
+          
+          console.log(`✅ ${network.key.toUpperCase()} Inventory:`, inStock ? 'IN STOCK' : 'OUT OF STOCK');
+        }
+      } catch (error) {
+        console.error(`❌ Failed to check ${network.key} inventory:`, error);
+        
+        setNetworkInventory(prev => ({
+          ...prev,
+          [network.key]: {
+            inStock: false,
+            loading: false,
+            lastChecked: new Date()
+          }
+        }));
+      }
+    }
+  };
+
+  // Manual refresh handler
+  const handleRefreshInventory = () => {
+    setNetworkInventory(prev => ({
+      mtn: { ...prev.mtn, loading: true },
+      airteltigo: { ...prev.airteltigo, loading: true },
+      telecel: { ...prev.telecel, loading: true }
+    }));
+    checkNetworkInventory();
+  };
+
+  useEffect(() => {
+    const userDataStr = localStorage.getItem('userData');
+    if (!userDataStr) {
+      router.push('/SignUp');
+      return;
+    }
+
+    const userData = JSON.parse(userDataStr);
+    setUserName(userData.name || 'User');
+    loadDashboard(userData.id);
+    
+    const noticeHidden = localStorage.getItem('dataDeliveryNoticeDismissed');
+    if (noticeHidden === 'true') {
+      setDisplayNotice(false);
+    }
+
+    checkNetworkInventory();
+    
+    const inventoryInterval = setInterval(() => {
+      console.log('🔄 Auto-refreshing network inventory...');
+      checkNetworkInventory();
+    }, 30000);
+    
+    return () => {
+      clearInterval(inventoryInterval);
+    };
+  }, [router]);
+
+  const loadDashboard = async (userId) => {
+    try {
+      setIsLoading(true);
+      const token = localStorage.getItem('authToken');
+      
+      const res = await fetch(`https://datanest-lkyu.onrender.com/api/v1/data/user-dashboard/${userId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to fetch dashboard data');
+      }
+
+      const data = await res.json();
+      
+      if (data.status === 'success') {
+        const { userBalance, todayOrders } = data.data;
+        
+        setStats({
+          balance: userBalance,
+          todayOrders: todayOrders.count,
+          todayGbSold: todayOrders.totalGbSold,
+          todayRevenue: todayOrders.totalValue,
+          recentTransactions: todayOrders.orders.map(order => ({
+            id: order._id,
+            customer: order.phoneNumber,
+            method: order.method,
+            amount: order.price,
+            gb: formatDataSize(order.capacity),
+            time: new Date(order.createdAt).toLocaleTimeString('en-US', {
+              hour: 'numeric',
+              minute: '2-digit',
+              hour12: true
+            }),
+            network: order.network
+          }))
+        });
+        
+        setIsLoading(false);
+        setTimeout(() => setStartAnimation(true), 200);
+      }
+    } catch (err) {
+      console.error('Dashboard error:', err);
+      setIsLoading(false);
+    }
+  };
+
+  const formatDataSize = (capacity) => {
+    if (capacity >= 1000) {
+      return (capacity / 1000).toFixed(1);
+    }
+    return capacity;
+  };
+
+  const formatMoney = (value) => {
     return new Intl.NumberFormat('en-GH', {
       style: 'currency',
       currency: 'GHS',
@@ -81,341 +206,388 @@ const DashboardPage = () => {
     }).format(value);
   };
 
-  const getGreeting = () => {
-    const hour = new Date().getHours();
-    if (hour < 12) return 'Good morning'; 
-    if (hour < 18) return 'Good afternoon'; 
-    return 'Good evening'; 
+  const getTimeGreeting = () => {
+    const hr = new Date().getHours();
+    if (hr < 12) return 'Good morning';
+    if (hr < 18) return 'Good afternoon';
+    return 'Good evening';
   };
 
-  const dismissNotice = () => {
-    setShowNotice(false);
+  const hideNotice = () => {
+    setDisplayNotice(false);
     localStorage.setItem('dataDeliveryNoticeDismissed', 'true');
   };
 
-  useEffect(() => {
-    setLoading(false);
-    setAnimateStats(true);
-    setUserName('User');
-    setStats({
-      balance: 1250,
-      todayOrders: 8,
-      todayGbSold: 45.5,
-      todayRevenue: 325,
-      recentTransactions: [
-        {
-          id: '1',
-          customer: '0541234567',
-          method: 'Wallet',
-          amount: 50,
-          gb: '10',
-          time: '2:30 PM',
-          network: 'MTN'
-        }
-      ]
-    });
-  }, []);
-
-  if (loading) {
+  if (isLoading) {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
+      <div className="flex items-center justify-center min-h-screen bg-gray-50 dark:bg-gray-900">
         <div className="text-center">
-          <div className="relative w-20 h-20 mx-auto mb-6">
-            <div className="w-20 h-20 rounded-full border-3 border-slate-200 dark:border-slate-700"></div>
-            <div className="absolute top-0 w-20 h-20 rounded-full border-3 border-transparent border-t-blue-600 dark:border-t-blue-500 animate-spin"></div>
-            <div className="absolute inset-3 rounded-xl bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 flex items-center justify-center shadow-lg">
-              <Database className="w-7 h-7 text-white" strokeWidth={2.5} />
-            </div>
+          <div className="w-16 h-16 mx-auto mb-4 relative">
+            <div className="absolute inset-0 rounded-full border-4 border-gray-200 dark:border-gray-700"></div>
+            <div className="absolute inset-0 rounded-full border-4 border-transparent border-t-yellow-500 animate-spin"></div>
           </div>
-          <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Loading...</p>
+          <p className="text-sm text-gray-600 dark:text-gray-400">Loading dashboard...</p>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-900 transition-colors duration-300">
-      <div className="px-4 sm:px-6 lg:px-8 py-6 max-w-7xl mx-auto">
-        {/* Service Notice */}
-        {showNotice && (
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Service notice */}
+        {displayNotice && (
           <div className="mb-6">
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-950/30 dark:to-indigo-950/30 border border-blue-200 dark:border-blue-800 rounded-xl p-5 shadow-sm">
-              <div className="flex items-start">
-                <div className="p-2 bg-blue-100 dark:bg-blue-900/40 rounded-lg mr-3 flex-shrink-0">
-                  <Info className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2} />
+            <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-3 sm:p-4">
+              <div className="flex items-start gap-2 sm:gap-3">
+                <div className="flex-shrink-0 w-6 h-6 sm:w-8 sm:h-8 bg-amber-100 dark:bg-amber-900/30 rounded-lg flex items-center justify-center">
+                  <Info className="w-3 h-3 sm:w-4 sm:h-4 text-amber-600 dark:text-amber-400" />
                 </div>
-                <div className="flex-grow">
-                  <h3 className="text-sm font-bold text-blue-900 dark:text-blue-300 mb-3">Service Information</h3>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="flex items-center space-x-2.5">
-                      <div className="p-1.5 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                        <Timer className="w-4 h-4 text-blue-600 dark:text-blue-400" strokeWidth={2} />
+                
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-start justify-between mb-2 sm:mb-3">
+                    <h3 className="text-xs sm:text-sm font-semibold text-gray-900 dark:text-white">
+                      Service Information
+                    </h3>
+                    <button
+                      onClick={hideNotice}
+                      className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 ml-2"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+                  
+                  <p className="text-xs sm:text-sm text-gray-700 dark:text-gray-300 mb-2 sm:mb-3">
+                    Data bundles are delivered within 5 minutes to 4 hours depending on network conditions.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 sm:gap-3">
+                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 sm:p-3">
+                      <div className="flex items-center gap-1 sm:gap-2 mb-1">
+                        <Timer className="w-3 h-3 sm:w-4 sm:h-4 text-amber-600 flex-shrink-0" />
+                        <span className="text-[10px] sm:text-xs font-semibold text-gray-900 dark:text-white">Delivery Time</span>
                       </div>
-                      <div>
-                        <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Delivery Time</p>
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white">5 min - 4 hours</p>
-                      </div>
+                      <p className="text-xs sm:text-sm font-semibold text-amber-600">5 min - 4 hours</p>
                     </div>
-                    <div className="flex items-center space-x-2.5">
-                      <div className="p-1.5 bg-blue-100 dark:bg-blue-900/40 rounded-lg">
-                        <Clock className="w-4 h-4 text-blue-600 dark:text-blue-400" strokeWidth={2} />
+                    
+                    <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-2 sm:p-3">
+                      <div className="flex items-center gap-1 sm:gap-2 mb-1">
+                        <Clock className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600 flex-shrink-0" />
+                        <span className="text-[10px] sm:text-xs font-semibold text-gray-900 dark:text-white">Business Hours</span>
                       </div>
-                      <div>
-                        <p className="text-xs font-medium text-slate-600 dark:text-slate-400">Service Hours</p>
-                        <p className="text-sm font-semibold text-slate-900 dark:text-white">8:00 AM - 9:00 PM</p>
-                      </div>
+                      <p className="text-xs sm:text-sm font-semibold text-blue-600">8:00 AM - 9:00 PM</p>
+                      <p className="text-[10px] sm:text-xs text-gray-600 dark:text-gray-400 mt-0.5 sm:mt-1">7 days a week</p>
                     </div>
                   </div>
                 </div>
-                <button
-                  onClick={dismissNotice}
-                  className="p-2 text-blue-600 dark:text-blue-400 hover:bg-blue-100 dark:hover:bg-blue-900/40 rounded-lg transition-colors ml-2"
-                >
-                  <X className="w-5 h-5" strokeWidth={2} />
-                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* Welcome Section with Dark Mode Toggle */}
-        <div className="mb-8 flex justify-between items-start">
-          <div>
-            <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-2 tracking-tight">
-              {getGreeting()}, {userName}!
-            </h2>
-            <p className="text-slate-600 dark:text-slate-400 font-medium">Welcome to your DataNest GH dashboard</p>
+        {/* Account Balance */}
+        <div className="mb-6">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6">
+            <div className="flex items-start justify-between mb-4">
+              <div>
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Account Balance</p>
+                <div className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white">
+                  {startAnimation ? 
+                    formatMoney(stats.balance)
+                    : formatMoney(0)
+                  }
+                </div>
+              </div>
+              <div className="w-10 h-10 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg flex items-center justify-center">
+                <CreditCard className="w-5 h-5 text-yellow-600" />
+              </div>
+            </div>
+            
+            <button
+              onClick={goToTopup}
+              className="flex items-center gap-2 px-4 py-2 bg-yellow-500 text-white rounded-lg hover:bg-yellow-600 transition-colors text-sm font-medium w-full sm:w-auto justify-center"
+            >
+              <PlusCircle className="w-4 h-4" />
+              Add Funds
+            </button>
           </div>
-          <button
-            onClick={toggleDarkMode}
-            className="p-2.5 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors shadow-sm"
-          >
-            {darkMode ? (
-              <Sun className="w-5 h-5 text-amber-500" strokeWidth={2} />
-            ) : (
-              <Moon className="w-5 h-5 text-slate-700" strokeWidth={2} />
-            )}
-          </button>
         </div>
 
-        {/* Top Row - Balance & Data Volume (No Scroll Required) */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-5 mb-6">
-          {/* Balance Card - Larger */}
-          <div className="sm:col-span-2 lg:col-span-7 bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 rounded-xl shadow-lg p-6 relative overflow-hidden group hover:shadow-xl transition-all duration-300">
-            <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 group-hover:scale-110 transition-transform"></div>
-            <div className="relative">
-              <div className="flex items-start justify-between mb-4">
-                <div className="p-2.5 bg-white/20 backdrop-blur-sm rounded-xl">
-                  <CreditCard className="w-6 h-6 text-white" strokeWidth={2} />
+        {/* Network selection */}
+        <div className="mb-6">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-white">
+                Select Network
+              </h2>
+              
+              {/* Refresh Button */}
+              <button
+                onClick={handleRefreshInventory}
+                disabled={networkInventory.mtn.loading || networkInventory.airteltigo.loading || networkInventory.telecel.loading}
+                className="flex items-center gap-1 px-3 py-1.5 bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 rounded-lg disabled:opacity-50 disabled:cursor-not-allowed text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300 transition-colors"
+                title="Refresh inventory status"
+              >
+                <svg className={`w-4 h-4 ${(networkInventory.mtn.loading || networkInventory.airteltigo.loading || networkInventory.telecel.loading) ? 'animate-spin' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span className="hidden sm:inline">Refresh</span>
+              </button>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
+              {/* MTN Card */}
+              <button 
+                onClick={() => goToNetwork('mtn')}
+                disabled={!networkInventory.mtn.inStock}
+                className={`relative p-4 sm:p-6 rounded-lg transition-all active:scale-95 shadow-lg ${
+                  networkInventory.mtn.inStock 
+                    ? 'bg-gradient-to-br from-yellow-400 to-yellow-500 hover:from-yellow-500 hover:to-yellow-600 cursor-pointer' 
+                    : 'bg-gradient-to-br from-gray-400 to-gray-500 cursor-not-allowed opacity-60'
+                }`}
+              >
+                {/* Stock Status Badge */}
+                <div className="absolute top-2 right-2">
+                  <div className={`flex items-center px-2 py-1 rounded-full text-xs font-bold shadow-md ${
+                    networkInventory.mtn.loading 
+                      ? 'bg-gray-200 text-gray-600' 
+                      : networkInventory.mtn.inStock 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-red-500 text-white'
+                  }`}>
+                    <div className={`w-1.5 h-1.5 rounded-full mr-1 ${
+                      networkInventory.mtn.loading 
+                        ? 'bg-gray-400' 
+                        : networkInventory.mtn.inStock 
+                          ? 'bg-white animate-pulse' 
+                          : 'bg-white'
+                    }`}></div>
+                    <span className="text-[10px]">
+                      {networkInventory.mtn.loading ? 'Checking' : networkInventory.mtn.inStock ? 'In Stock' : 'Out of Stock'}
+                    </span>
+                  </div>
                 </div>
-                <button
-                  onClick={() => router.push('/topup')}
-                  className="text-xs bg-white/20 hover:bg-white/30 text-white font-bold px-3 py-1.5 rounded-lg transition-all hover:scale-105 backdrop-blur-sm"
+                
+                <div className="flex sm:flex-col items-center sm:text-center gap-3 sm:gap-0">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 sm:mx-auto sm:mb-3 bg-white rounded-lg flex items-center justify-center shadow-md flex-shrink-0">
+                    <span className="text-lg sm:text-xl font-bold text-yellow-500">MTN</span>
+                  </div>
+                  <div className="flex-1 sm:flex-none text-left sm:text-center">
+                    <p className="text-sm sm:text-base font-bold text-white">MTN Mobile Money</p>
+                    <p className="text-xs text-yellow-100 mt-0.5 sm:mt-1">
+                      {networkInventory.mtn.inStock ? 'Fast & Reliable' : 'Currently Unavailable'}
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {/* AirtelTigo Card */}
+              <button 
+                onClick={() => goToNetwork('airteltigo')}
+                disabled={!networkInventory.airteltigo.inStock}
+                className={`relative p-4 sm:p-6 rounded-lg transition-all active:scale-95 shadow-lg ${
+                  networkInventory.airteltigo.inStock 
+                    ? 'bg-gradient-to-br from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 cursor-pointer' 
+                    : 'bg-gradient-to-br from-gray-400 to-gray-500 cursor-not-allowed opacity-60'
+                }`}
+              >
+                {/* Stock Status Badge */}
+                <div className="absolute top-2 right-2">
+                  <div className={`flex items-center px-2 py-1 rounded-full text-xs font-bold shadow-md ${
+                    networkInventory.airteltigo.loading 
+                      ? 'bg-gray-200 text-gray-600' 
+                      : networkInventory.airteltigo.inStock 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-red-500 text-white'
+                  }`}>
+                    <div className={`w-1.5 h-1.5 rounded-full mr-1 ${
+                      networkInventory.airteltigo.loading 
+                        ? 'bg-gray-400' 
+                        : networkInventory.airteltigo.inStock 
+                          ? 'bg-white animate-pulse' 
+                          : 'bg-white'
+                    }`}></div>
+                    <span className="text-[10px]">
+                      {networkInventory.airteltigo.loading ? 'Checking' : networkInventory.airteltigo.inStock ? 'In Stock' : 'Out of Stock'}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex sm:flex-col items-center sm:text-center gap-3 sm:gap-0">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 sm:mx-auto sm:mb-3 bg-white rounded-lg flex items-center justify-center shadow-md flex-shrink-0">
+                    <span className="text-sm sm:text-sm font-bold text-red-600">AT</span>
+                  </div>
+                  <div className="flex-1 sm:flex-none text-left sm:text-center">
+                    <p className="text-sm sm:text-base font-bold text-white">AirtelTigo</p>
+                    <p className="text-xs text-red-100 mt-0.5 sm:mt-1">
+                      {networkInventory.airteltigo.inStock ? 'Premium Quality' : 'Currently Unavailable'}
+                    </p>
+                  </div>
+                </div>
+              </button>
+
+              {/* Telecel Card */}
+              <button 
+                onClick={() => goToNetwork('telecel')}
+                disabled={!networkInventory.telecel.inStock}
+                className={`relative p-4 sm:p-6 rounded-lg transition-all active:scale-95 shadow-lg ${
+                  networkInventory.telecel.inStock 
+                    ? 'bg-gradient-to-br from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 cursor-pointer' 
+                    : 'bg-gradient-to-br from-gray-400 to-gray-500 cursor-not-allowed opacity-60'
+                }`}
+              >
+                {/* Stock Status Badge */}
+                <div className="absolute top-2 right-2">
+                  <div className={`flex items-center px-2 py-1 rounded-full text-xs font-bold shadow-md ${
+                    networkInventory.telecel.loading 
+                      ? 'bg-gray-200 text-gray-600' 
+                      : networkInventory.telecel.inStock 
+                        ? 'bg-green-500 text-white' 
+                        : 'bg-red-500 text-white'
+                  }`}>
+                    <div className={`w-1.5 h-1.5 rounded-full mr-1 ${
+                      networkInventory.telecel.loading 
+                        ? 'bg-gray-400' 
+                        : networkInventory.telecel.inStock 
+                          ? 'bg-white animate-pulse' 
+                          : 'bg-white'
+                    }`}></div>
+                    <span className="text-[10px]">
+                      {networkInventory.telecel.loading ? 'Checking' : networkInventory.telecel.inStock ? 'In Stock' : 'Out of Stock'}
+                    </span>
+                  </div>
+                </div>
+                
+                <div className="flex sm:flex-col items-center sm:text-center gap-3 sm:gap-0">
+                  <div className="w-12 h-12 sm:w-16 sm:h-16 sm:mx-auto sm:mb-3 bg-white rounded-lg flex items-center justify-center shadow-md flex-shrink-0">
+                    <span className="text-base sm:text-base font-bold text-purple-600">TEL</span>
+                  </div>
+                  <div className="flex-1 sm:flex-none text-left sm:text-center">
+                    <p className="text-sm sm:text-base font-bold text-white">Telecel</p>
+                    <p className="text-xs text-purple-100 mt-0.5 sm:mt-1">
+                      {networkInventory.telecel.inStock ? 'Growing Network' : 'Currently Unavailable'}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            </div>
+            
+            {/* Last Checked Timestamp */}
+            {(networkInventory.mtn.lastChecked || networkInventory.airteltigo.lastChecked || networkInventory.telecel.lastChecked) && (
+              <div className="text-xs text-gray-500 dark:text-gray-400 mt-3 text-right">
+                Last checked: {(networkInventory.mtn.lastChecked || networkInventory.airteltigo.lastChecked || networkInventory.telecel.lastChecked)?.toLocaleTimeString()}
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Orders and Revenue Stats */}
+        <div className="mb-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Orders */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6">
+              <div className="flex items-start justify-between mb-2">
+                <div className="w-10 h-10 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg flex items-center justify-center">
+                  <Package className="w-5 h-5 text-yellow-600" />
+                </div>
+                <div className="text-2xl sm:text-3xl font-semibold text-gray-900 dark:text-white">
+                  {startAnimation ? stats.todayOrders : "0"}
+                </div>
+              </div>
+              <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">Orders Today</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Total transactions</p>
+            </div>
+
+            {/* Revenue */}
+            <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 sm:p-6">
+              <div className="flex items-start justify-between mb-2">
+                <div className="w-10 h-10 bg-green-50 dark:bg-green-900/20 rounded-lg flex items-center justify-center">
+                  <TrendingUp className="w-5 h-5 text-green-600" />
+                </div>
+                <div className="text-xl sm:text-2xl font-semibold text-gray-900 dark:text-white">
+                  {startAnimation ? 
+                    formatMoney(stats.todayRevenue)
+                    : formatMoney(0)
+                  }
+                </div>
+              </div>
+              <p className="text-xs sm:text-sm font-medium text-gray-900 dark:text-white">Revenue Today</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400">Total earnings</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Recent activity */}
+        <div className="mb-6">
+          <div className="bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg overflow-hidden">
+            <div className="p-6 border-b border-gray-200 dark:border-gray-700">
+              <div className="flex items-center justify-between">
+                <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+                  Recent Activity
+                </h2>
+                <button 
+                  onClick={() => router.push('/orders')}
+                  className="flex items-center gap-2 text-sm text-yellow-600 hover:text-yellow-700 font-medium"
                 >
-                  Deposit
+                  View All
+                  <ArrowRight className="w-4 h-4" />
                 </button>
               </div>
-              <p className="text-blue-100 text-sm font-semibold mb-2">Available Balance</p>
-              <p className="text-3xl sm:text-4xl font-bold text-white">{formatCurrency(stats.balance)}</p>
             </div>
-          </div>
-
-          {/* GB Sold Card - Compact */}
-          <div className="sm:col-span-2 lg:col-span-5 bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-5 sm:p-6 relative overflow-hidden group hover:shadow-lg transition-all duration-300">
-            <div className="relative">
-              <div className="flex items-start justify-between mb-3 sm:mb-4">
-                <div className="p-2 sm:p-2.5 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
-                  <Database className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-500" strokeWidth={2} />
-                </div>
-              </div>
-              <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm font-semibold mb-1 sm:mb-2">GB Sold Today</p>
-              <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
-                {stats.todayGbSold} <span className="text-lg sm:text-xl text-slate-500 dark:text-slate-400">GB</span>
-              </p>
-              <p className="mt-2 sm:mt-3 text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Data transferred
-              </p>
-            </div>
-          </div>
-        </div>
-
-        {/* Second Row - Other Stats */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
-          {/* Orders Card */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-6 relative overflow-hidden group hover:shadow-lg transition-all duration-300">
-            <div className="relative">
-              <div className="flex items-start justify-between mb-4">
-                <div className="p-2.5 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl">
-                  <Package className="w-6 h-6 text-emerald-600 dark:text-emerald-500" strokeWidth={2} />
-                </div>
-              </div>
-              <p className="text-slate-600 dark:text-slate-400 text-sm font-semibold mb-2">Orders Today</p>
-              <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.todayOrders}</p>
-              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 font-medium">
-                {stats.todayOrders > 0 ? `Active trading day` : 'No orders yet'}
-              </p>
-            </div>
-          </div>
-
-          {/* Revenue Card */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-6 relative overflow-hidden group hover:shadow-lg transition-all duration-300">
-            <div className="relative">
-              <div className="flex items-start justify-between mb-4">
-                <div className="p-2.5 bg-amber-50 dark:bg-amber-900/20 rounded-xl">
-                  <TrendingUp className="w-6 h-6 text-amber-600 dark:text-amber-500" strokeWidth={2} />
-                </div>
-              </div>
-              <p className="text-slate-600 dark:text-slate-400 text-sm font-semibold mb-2">Revenue Today</p>
-              <p className="text-3xl font-bold text-slate-900 dark:text-white">{formatCurrency(stats.todayRevenue)}</p>
-              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 font-medium">Total earnings</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Quick Actions */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-          {/* Network Services */}
-          <div className="lg:col-span-2 bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-6">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-5 flex items-center">
-              <Zap className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-500" strokeWidth={2.5} />
-              Quick Order
-            </h3>
-            <div className="grid grid-cols-3 gap-4">
-              <button 
-                className="group p-5 bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 hover:from-yellow-100 hover:to-amber-100 dark:hover:from-yellow-900/30 dark:hover:to-amber-900/30 rounded-xl border border-yellow-200 dark:border-yellow-800 transition-all duration-300 hover:scale-105 hover:shadow-lg"
-              >
-                <div className="text-center">
-                  <div className="w-14 h-14 mx-auto mb-3 bg-gradient-to-br from-yellow-500 to-amber-500 rounded-xl flex items-center justify-center shadow-md group-hover:rotate-6 transition-transform">
-                    <Globe className="w-7 h-7 text-white" strokeWidth={2} />
-                  </div>
-                  <p className="font-bold text-slate-900 dark:text-white mb-1">MTN</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Best Prices</p>
-                </div>
-              </button>
-
-              <button 
-                className="group p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-900/30 dark:hover:to-indigo-900/30 rounded-xl border border-blue-200 dark:border-blue-800 transition-all duration-300 hover:scale-105 hover:shadow-lg"
-              >
-                <div className="text-center">
-                  <div className="w-14 h-14 mx-auto mb-3 bg-gradient-to-br from-blue-500 to-indigo-500 rounded-xl flex items-center justify-center shadow-md group-hover:rotate-6 transition-transform">
-                    <Globe className="w-7 h-7 text-white" strokeWidth={2} />
-                  </div>
-                  <p className="font-bold text-slate-900 dark:text-white mb-1">AirtelTigo</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Fast Delivery</p>
-                </div>
-              </button>
-
-              <button 
-                className="group p-5 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 hover:from-red-100 hover:to-rose-100 dark:hover:from-red-900/30 dark:hover:to-rose-900/30 rounded-xl border border-red-200 dark:border-red-800 transition-all duration-300 hover:scale-105 hover:shadow-lg"
-              >
-                <div className="text-center">
-                  <div className="w-14 h-14 mx-auto mb-3 bg-gradient-to-br from-red-500 to-rose-500 rounded-xl flex items-center justify-center shadow-md group-hover:rotate-6 transition-transform">
-                    <Globe className="w-7 h-7 text-white" strokeWidth={2} />
-                  </div>
-                  <p className="font-bold text-slate-900 dark:text-white mb-1">Telecel</p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 font-medium">Great Deals</p>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* Quick Links */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-6">
-            <h3 className="text-lg font-bold text-slate-900 dark:text-white mb-5 flex items-center">
-              <Activity className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-500" strokeWidth={2.5} />
-              Quick Actions
-            </h3>
-            <div className="space-y-2.5">
-              <button
-                className="w-full text-left p-3.5 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700 dark:hover:to-slate-700 rounded-xl transition-all flex items-center justify-between group border border-transparent hover:border-blue-200 dark:hover:border-slate-600"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg group-hover:scale-110 transition-transform">
-                    <CreditCard className="w-4 h-4 text-blue-600 dark:text-blue-400" strokeWidth={2} />
-                  </div>
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Add Funds</span>
-                </div>
-                <ChevronUp className="w-4 h-4 text-slate-400 dark:text-slate-500 -rotate-90 group-hover:translate-x-1 transition-transform" strokeWidth={2} />
-              </button>
-              
-              <button
-                className="w-full text-left p-3.5 hover:bg-gradient-to-r hover:from-emerald-50 hover:to-green-50 dark:hover:from-slate-700 dark:hover:to-slate-700 rounded-xl transition-all flex items-center justify-between group border border-transparent hover:border-emerald-200 dark:hover:border-slate-600"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-emerald-100 dark:bg-emerald-900/30 rounded-lg group-hover:scale-110 transition-transform">
-                    <FileText className="w-4 h-4 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
-                  </div>
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">View Orders</span>
-                </div>
-                <ChevronUp className="w-4 h-4 text-slate-400 dark:text-slate-500 -rotate-90 group-hover:translate-x-1 transition-transform" strokeWidth={2} />
-              </button>
-              
-              <button
-                className="w-full text-left p-3.5 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 dark:hover:from-slate-700 dark:hover:to-slate-700 rounded-xl transition-all flex items-center justify-between group border border-transparent hover:border-purple-200 dark:hover:border-slate-600"
-              >
-                <div className="flex items-center space-x-3">
-                  <div className="p-2 bg-purple-100 dark:bg-purple-900/30 rounded-lg group-hover:scale-110 transition-transform">
-                    <HelpCircle className="w-4 h-4 text-purple-600 dark:text-purple-400" strokeWidth={2} />
-                  </div>
-                  <span className="text-sm font-semibold text-slate-700 dark:text-slate-300">Get Support</span>
-                </div>
-                <ChevronUp className="w-4 h-4 text-slate-400 dark:text-slate-500 -rotate-90 group-hover:translate-x-1 transition-transform" strokeWidth={2} />
-              </button>
-            </div>
-          </div>
-        </div>
-
-        {/* Recent Transactions */}
-        <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700">
-          <div className="px-6 py-5 border-b border-slate-200 dark:border-slate-700">
-            <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-slate-900 dark:text-white flex items-center">
-                <Activity className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-500" strokeWidth={2.5} />
-                Recent Transactions
-              </h3>
-              <button 
-                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-semibold flex items-center space-x-1 hover:translate-x-1 transition-transform"
-              >
-                <span>View All</span>
-                <ArrowUpRight className="w-4 h-4" strokeWidth={2} />
-              </button>
-            </div>
-          </div>
-          
-          <div className="p-6">
-            {stats.recentTransactions.length > 0 ? (
-              <div className="space-y-3">
-                {stats.recentTransactions.slice(0, 5).map((transaction) => (
-                  <div key={transaction.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700 dark:hover:to-slate-700 rounded-xl transition-all duration-300 border border-transparent hover:border-blue-100 dark:hover:border-slate-600">
-                    <div className="flex items-center space-x-3.5">
-                      <div className="p-2.5 rounded-xl shadow-sm bg-purple-100 dark:bg-purple-900/30">
-                        <Database className="w-5 h-5 text-purple-600 dark:text-purple-400" strokeWidth={2} />
+            
+            <div className="p-6">
+              {stats.recentTransactions.length > 0 ? (
+                <div className="space-y-3">
+                  {stats.recentTransactions.slice(0, 5).map((tx) => (
+                    <div key={tx.id} className="flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg flex items-center justify-center">
+                          <Database className="w-5 h-5 text-yellow-600" />
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900 dark:text-white">{tx.customer}</p>
+                          <p className="text-xs text-gray-600 dark:text-gray-400">{tx.gb}GB • {tx.method}</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="text-sm font-bold text-slate-900 dark:text-white">{transaction.customer}</p>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
-                          {transaction.gb}GB • {transaction.method}
-                        </p>
+                      
+                      <div className="text-right">
+                        <p className="text-sm font-medium text-gray-900 dark:text-white">{formatMoney(tx.amount)}</p>
+                        <p className="text-xs text-gray-600 dark:text-gray-400">{tx.time}</p>
                       </div>
                     </div>
-                    
-                    <div className="text-right">
-                      <p className="text-sm font-bold text-slate-900 dark:text-white">{formatCurrency(transaction.amount)}</p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">{transaction.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-16">
-                <div className="w-20 h-20 mx-auto mb-4 rounded-2xl bg-slate-100 dark:bg-slate-700/50 flex items-center justify-center">
-                  <Database className="w-10 h-10 text-slate-300 dark:text-slate-600" strokeWidth={2} />
+                  ))}
                 </div>
-                <p className="text-slate-600 dark:text-slate-400 font-semibold text-lg mb-1">No transactions yet</p>
-                <p className="text-sm text-slate-500 dark:text-slate-500">Your recent transactions will appear here</p>
-              </div>
-            )}
+              ) : (
+                <div className="text-center py-8">
+                  <div className="w-12 h-12 mx-auto bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center mb-3">
+                    <Database className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">No transactions yet</p>
+                </div>
+              )}
+            </div>
           </div>
+        </div>
+
+        {/* Quick actions */}
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          {[
+            { icon: Package, label: 'New Order', path: '/datamart' },
+            { icon: BarChart2, label: 'Analytics', path: '/reports' },
+            { icon: Clock, label: 'History', path: '/orders' },
+            { icon: CreditCard, label: 'Top Up', onClick: goToTopup },
+            { icon: AlertCircle, label: 'Support', path: '/support' },
+            { icon: User, label: 'Profile', path: '/profile' }
+          ].map((action, idx) => (
+            <button
+              key={idx}
+              onClick={action.onClick || (() => router.push(action.path))}
+              className="p-4 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
+            >
+              <action.icon className="w-5 h-5 text-gray-600 dark:text-gray-400 mx-auto mb-2" />
+              <p className="text-xs font-medium text-gray-900 dark:text-white text-center">{action.label}</p>
+            </button>
+          ))}
         </div>
       </div>
     </div>
