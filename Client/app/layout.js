@@ -17,7 +17,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata = {
-  title: "DataSpot | Data Marketplace",
+  title: "Datanest gh | Data Marketplace",
   description: "The leading platform for data resellers in Ghana to buy and sell client data securely and efficiently.",
   keywords: "data marketplace, Ghana, data resellers, buy data, sell data, client data, Ghana data market",
   verification: {
@@ -26,7 +26,7 @@ export const metadata = {
   openGraph: {
     title: " | Ghana's Premier Data Marketplace",
     description: "Connect with data resellers across Ghana. Buy and sell client data securely on our trusted platform.",
-    url: "https://www.Dataspot.store",
+    url: "https://www.datanestgh.com",
     siteName: "DATAHUSTLE", 
     images: [
       {
@@ -46,13 +46,13 @@ export const metadata = {
     images: ["/images/datamart-twitter.jpg"],
   },
   alternates: {
-    canonical: "https://www.datahustle.shop/",
+    canonical: "https://www.datanestgh.shop/",
   },
   robots: {
     index: true,
     follow: true,
   },
-  metadataBase: new URL("https://www.datahustle.shop"),
+  metadataBase: new URL("https://www.datanestgh.shop"),
 };
 
 export default function RootLayout({ children }) {
