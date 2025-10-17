@@ -34,8 +34,6 @@ import {
   Sparkles
 } from 'lucide-react';
 import { useRouter } from 'next/navigation';
-import { AnimatedCounter, CurrencyCounter } from './Animation';
-import DailySalesChart from '@/app/week/page';
 
 const DashboardPage = () => {
   const router = useRouter();
@@ -53,7 +51,6 @@ const DashboardPage = () => {
   const [animateStats, setAnimateStats] = useState(false);
   const [showNotice, setShowNotice] = useState(true);
 
-  // Check for dark mode preference on mount
   useEffect(() => {
     const savedDarkMode = localStorage.getItem('darkMode');
     if (savedDarkMode === 'true') {
@@ -63,7 +60,6 @@ const DashboardPage = () => {
     }
   }, []);
 
-  // Apply dark mode class to body
   useEffect(() => {
     if (darkMode) {
       document.documentElement.classList.add('dark');
@@ -75,118 +71,6 @@ const DashboardPage = () => {
 
   const toggleDarkMode = () => {
     setDarkMode(!darkMode);
-  };
-
-  const ViewAll = () => {
-    router.push('/orders');
-  };
-
-  const navigateToTransactions = () => {
-    router.push('/myorders');
-  };
-
-  const navigateToTopup = () => {
-    router.push('/topup');
-  };
-  
-  const navigateToregisterFriend = () => {
-    router.push('/registerFriend');
-  };
-  
-  const navigateToVerificationServices = () => {
-    router.push('/verification-services');
-  };
-
-  const navigateToNetwork = (network) => {
-    switch(network) {
-      case 'mtn':
-        router.push('/mtnup2u');
-        break;
-      case 'airteltigo':
-        router.push('/at-ishare');
-        break;
-      case 'telecel':
-        router.push('/TELECEL');
-        break;
-      default:
-        router.push('/');
-    }
-  };
-
-  useEffect(() => {
-    const userDataString = localStorage.getItem('userData');
-    if (!userDataString) {
-      router.push('/SignUp');
-      return;
-    }
-
-    const userData = JSON.parse(userDataString);
-    setUserName(userData.name || 'User');
-    fetchDashboardData(userData.id);
-    
-    const noticeDismissed = localStorage.getItem('dataDeliveryNoticeDismissed');
-    if (noticeDismissed === 'true') {
-      setShowNotice(false);
-    }
-  }, [router]);
-
-  const fetchDashboardData = async (userId) => {
-    try {
-      setLoading(true);
-      const authToken = localStorage.getItem('authToken');
-      
-      const response = await fetch(`https://datanest-lkyu.onrender.com/api/v1/data/user-dashboard/${userId}`, {
-        headers: {
-          'Authorization': `Bearer ${authToken}`
-        }
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch dashboard data');
-      }
-
-      const responseData = await response.json();
-      
-      if (responseData.status === 'success') {
-        const { userBalance, todayOrders } = responseData.data;
-        
-        setStats({
-          balance: userBalance,
-          todayOrders: todayOrders.count,
-          todayGbSold: todayOrders.totalGbSold,
-          todayRevenue: todayOrders.totalValue,
-          recentTransactions: todayOrders.orders.map(order => ({
-            id: order._id,
-            customer: order.phoneNumber,
-            method: order.method,
-            amount: order.price,
-            gb: formatDataCapacity(order.capacity),
-            time: new Date(order.createdAt).toLocaleTimeString('en-US', {
-              hour: 'numeric',
-              minute: '2-digit',
-              hour12: true
-            }),
-            network: order.network
-          }))
-        });
-        
-        setLoading(false);
-        
-        setTimeout(() => {
-          setAnimateStats(true);
-        }, 300);
-      }
-    } catch (error) {
-      console.error('Error fetching dashboard data:', error);
-      setLoading(false);
-    }
-  };
-
-  const formatDataCapacity = (capacity) => {
-    if (capacity >= 1000) {
-      return (capacity / 1000).toFixed(1);
-    }
-    return capacity;
   };
 
   const formatCurrency = (value) => {
@@ -209,6 +93,29 @@ const DashboardPage = () => {
     localStorage.setItem('dataDeliveryNoticeDismissed', 'true');
   };
 
+  useEffect(() => {
+    setLoading(false);
+    setAnimateStats(true);
+    setUserName('User');
+    setStats({
+      balance: 1250,
+      todayOrders: 8,
+      todayGbSold: 45.5,
+      todayRevenue: 325,
+      recentTransactions: [
+        {
+          id: '1',
+          customer: '0541234567',
+          method: 'Wallet',
+          amount: 50,
+          gb: '10',
+          time: '2:30 PM',
+          network: 'MTN'
+        }
+      ]
+    });
+  }, []);
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800">
@@ -220,12 +127,7 @@ const DashboardPage = () => {
               <Database className="w-7 h-7 text-white" strokeWidth={2.5} />
             </div>
           </div>
-          <div className="flex items-center justify-center space-x-2 mb-2">
-            <h1 className="text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
-              DataNest <span className="text-blue-600 dark:text-blue-500">GH</span>
-            </h1>
-          </div>
-          <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Loading your dashboard...</p>
+          <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Loading...</p>
         </div>
       </div>
     );
@@ -296,10 +198,10 @@ const DashboardPage = () => {
           </button>
         </div>
 
-        {/* Stats Grid - Professional Design */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
-          {/* Balance Card */}
-          <div className="bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 rounded-xl shadow-lg p-6 relative overflow-hidden group hover:shadow-xl transition-all duration-300">
+        {/* Top Row - Balance & Data Volume (No Scroll Required) */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-5 mb-6">
+          {/* Balance Card - Larger */}
+          <div className="sm:col-span-2 lg:col-span-7 bg-gradient-to-br from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 rounded-xl shadow-lg p-6 relative overflow-hidden group hover:shadow-xl transition-all duration-300">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -mr-16 -mt-16 group-hover:scale-110 transition-transform"></div>
             <div className="relative">
               <div className="flex items-start justify-between mb-4">
@@ -307,22 +209,38 @@ const DashboardPage = () => {
                   <CreditCard className="w-6 h-6 text-white" strokeWidth={2} />
                 </div>
                 <button
-                  onClick={navigateToTopup}
+                  onClick={() => router.push('/topup')}
                   className="text-xs bg-white/20 hover:bg-white/30 text-white font-bold px-3 py-1.5 rounded-lg transition-all hover:scale-105 backdrop-blur-sm"
                 >
                   Deposit
                 </button>
               </div>
               <p className="text-blue-100 text-sm font-semibold mb-2">Available Balance</p>
-              <p className="text-3xl font-bold text-white">
-                {animateStats ? 
-                  <CurrencyCounter value={stats.balance} duration={1500} /> : 
-                  formatCurrency(0)
-                }
-              </p>
+              <p className="text-3xl sm:text-4xl font-bold text-white">{formatCurrency(stats.balance)}</p>
             </div>
           </div>
 
+          {/* GB Sold Card - Compact */}
+          <div className="sm:col-span-2 lg:col-span-5 bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-5 sm:p-6 relative overflow-hidden group hover:shadow-lg transition-all duration-300">
+            <div className="relative">
+              <div className="flex items-start justify-between mb-3 sm:mb-4">
+                <div className="p-2 sm:p-2.5 bg-purple-50 dark:bg-purple-900/20 rounded-lg">
+                  <Database className="w-5 h-5 sm:w-6 sm:h-6 text-purple-600 dark:text-purple-500" strokeWidth={2} />
+                </div>
+              </div>
+              <p className="text-slate-600 dark:text-slate-400 text-xs sm:text-sm font-semibold mb-1 sm:mb-2">GB Sold Today</p>
+              <p className="text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white">
+                {stats.todayGbSold} <span className="text-lg sm:text-xl text-slate-500 dark:text-slate-400">GB</span>
+              </p>
+              <p className="mt-2 sm:mt-3 text-xs text-slate-500 dark:text-slate-400 font-medium">
+                Data transferred
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {/* Second Row - Other Stats */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-5 mb-8">
           {/* Orders Card */}
           <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-6 relative overflow-hidden group hover:shadow-lg transition-all duration-300">
             <div className="relative">
@@ -332,35 +250,9 @@ const DashboardPage = () => {
                 </div>
               </div>
               <p className="text-slate-600 dark:text-slate-400 text-sm font-semibold mb-2">Orders Today</p>
-              <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                {animateStats ? 
-                  <AnimatedCounter value={stats.todayOrders} duration={1200} /> : 
-                  "0"
-                }
-              </p>
+              <p className="text-3xl font-bold text-slate-900 dark:text-white">{stats.todayOrders}</p>
               <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 font-medium">
                 {stats.todayOrders > 0 ? `Active trading day` : 'No orders yet'}
-              </p>
-            </div>
-          </div>
-
-          {/* Data Volume Card */}
-          <div className="bg-white dark:bg-slate-800 rounded-xl shadow-md border border-slate-200 dark:border-slate-700 p-6 relative overflow-hidden group hover:shadow-lg transition-all duration-300">
-            <div className="relative">
-              <div className="flex items-start justify-between mb-4">
-                <div className="p-2.5 bg-purple-50 dark:bg-purple-900/20 rounded-xl">
-                  <Database className="w-6 h-6 text-purple-600 dark:text-purple-500" strokeWidth={2} />
-                </div>
-              </div>
-              <p className="text-slate-600 dark:text-slate-400 text-sm font-semibold mb-2">GB Sold Today</p>
-              <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                {animateStats ? 
-                  <AnimatedCounter value={stats.todayGbSold} decimals={1} suffix=" GB" duration={1350} /> : 
-                  "0 GB"
-                }
-              </p>
-              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Data transferred
               </p>
             </div>
           </div>
@@ -374,15 +266,8 @@ const DashboardPage = () => {
                 </div>
               </div>
               <p className="text-slate-600 dark:text-slate-400 text-sm font-semibold mb-2">Revenue Today</p>
-              <p className="text-3xl font-bold text-slate-900 dark:text-white">
-                {animateStats ? 
-                  <CurrencyCounter value={stats.todayRevenue} duration={1500} /> : 
-                  formatCurrency(0)
-                }
-              </p>
-              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 font-medium">
-                Total earnings
-              </p>
+              <p className="text-3xl font-bold text-slate-900 dark:text-white">{formatCurrency(stats.todayRevenue)}</p>
+              <p className="mt-3 text-xs text-slate-500 dark:text-slate-400 font-medium">Total earnings</p>
             </div>
           </div>
         </div>
@@ -397,7 +282,6 @@ const DashboardPage = () => {
             </h3>
             <div className="grid grid-cols-3 gap-4">
               <button 
-                onClick={() => navigateToNetwork('mtn')}
                 className="group p-5 bg-gradient-to-br from-yellow-50 to-amber-50 dark:from-yellow-900/20 dark:to-amber-900/20 hover:from-yellow-100 hover:to-amber-100 dark:hover:from-yellow-900/30 dark:hover:to-amber-900/30 rounded-xl border border-yellow-200 dark:border-yellow-800 transition-all duration-300 hover:scale-105 hover:shadow-lg"
               >
                 <div className="text-center">
@@ -410,7 +294,6 @@ const DashboardPage = () => {
               </button>
 
               <button 
-                onClick={() => navigateToNetwork('airteltigo')}
                 className="group p-5 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 hover:from-blue-100 hover:to-indigo-100 dark:hover:from-blue-900/30 dark:hover:to-indigo-900/30 rounded-xl border border-blue-200 dark:border-blue-800 transition-all duration-300 hover:scale-105 hover:shadow-lg"
               >
                 <div className="text-center">
@@ -423,7 +306,6 @@ const DashboardPage = () => {
               </button>
 
               <button 
-                onClick={() => navigateToNetwork('telecel')}
                 className="group p-5 bg-gradient-to-br from-red-50 to-rose-50 dark:from-red-900/20 dark:to-rose-900/20 hover:from-red-100 hover:to-rose-100 dark:hover:from-red-900/30 dark:hover:to-rose-900/30 rounded-xl border border-red-200 dark:border-red-800 transition-all duration-300 hover:scale-105 hover:shadow-lg"
               >
                 <div className="text-center">
@@ -445,7 +327,6 @@ const DashboardPage = () => {
             </h3>
             <div className="space-y-2.5">
               <button
-                onClick={navigateToTopup}
                 className="w-full text-left p-3.5 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700 dark:hover:to-slate-700 rounded-xl transition-all flex items-center justify-between group border border-transparent hover:border-blue-200 dark:hover:border-slate-600"
               >
                 <div className="flex items-center space-x-3">
@@ -458,7 +339,6 @@ const DashboardPage = () => {
               </button>
               
               <button
-                onClick={() => router.push('/orders')}
                 className="w-full text-left p-3.5 hover:bg-gradient-to-r hover:from-emerald-50 hover:to-green-50 dark:hover:from-slate-700 dark:hover:to-slate-700 rounded-xl transition-all flex items-center justify-between group border border-transparent hover:border-emerald-200 dark:hover:border-slate-600"
               >
                 <div className="flex items-center space-x-3">
@@ -471,7 +351,6 @@ const DashboardPage = () => {
               </button>
               
               <button
-                onClick={() => router.push('/support')}
                 className="w-full text-left p-3.5 hover:bg-gradient-to-r hover:from-purple-50 hover:to-pink-50 dark:hover:from-slate-700 dark:hover:to-slate-700 rounded-xl transition-all flex items-center justify-between group border border-transparent hover:border-purple-200 dark:hover:border-slate-600"
               >
                 <div className="flex items-center space-x-3">
@@ -495,7 +374,6 @@ const DashboardPage = () => {
                 Recent Transactions
               </h3>
               <button 
-                onClick={ViewAll}
                 className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 font-semibold flex items-center space-x-1 hover:translate-x-1 transition-transform"
               >
                 <span>View All</span>
@@ -510,18 +388,8 @@ const DashboardPage = () => {
                 {stats.recentTransactions.slice(0, 5).map((transaction) => (
                   <div key={transaction.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-700/50 hover:bg-gradient-to-r hover:from-blue-50 hover:to-indigo-50 dark:hover:from-slate-700 dark:hover:to-slate-700 rounded-xl transition-all duration-300 border border-transparent hover:border-blue-100 dark:hover:border-slate-600">
                     <div className="flex items-center space-x-3.5">
-                      <div className={`p-2.5 rounded-xl shadow-sm ${
-                        transaction.network === 'YELLO' || transaction.network === 'MTN' ? 'bg-yellow-100 dark:bg-yellow-900/30' :
-                        transaction.network === 'AT_PREMIUM' || transaction.network === 'airteltigo' || transaction.network === 'at' ? 'bg-blue-100 dark:bg-blue-900/30' :
-                        transaction.network === 'TELECEL' ? 'bg-red-100 dark:bg-red-900/30' :
-                        'bg-purple-100 dark:bg-purple-900/30'
-                      }`}>
-                        <Database className={`w-5 h-5 ${
-                          transaction.network === 'YELLO' || transaction.network === 'MTN' ? 'text-yellow-600 dark:text-yellow-400' :
-                          transaction.network === 'AT_PREMIUM' || transaction.network === 'airteltigo' || transaction.network === 'at' ? 'text-blue-600 dark:text-blue-400' :
-                          transaction.network === 'TELECEL' ? 'text-red-600 dark:text-red-400' :
-                          'text-purple-600 dark:text-purple-400'
-                        }`} strokeWidth={2} />
+                      <div className="p-2.5 rounded-xl shadow-sm bg-purple-100 dark:bg-purple-900/30">
+                        <Database className="w-5 h-5 text-purple-600 dark:text-purple-400" strokeWidth={2} />
                       </div>
                       <div>
                         <p className="text-sm font-bold text-slate-900 dark:text-white">{transaction.customer}</p>
