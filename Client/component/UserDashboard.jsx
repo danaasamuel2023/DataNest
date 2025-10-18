@@ -235,6 +235,14 @@ const DashboardPage = () => {
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
       <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* User Greeting Header */}
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white">
+            {getTimeGreeting()}, <span className="text-yellow-600">{userName}</span>! 👋
+          </h1>
+          <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">Welcome back to your dashboard</p>
+        </div>
+
         {/* Service notice */}
         {displayNotice && (
           <div className="mb-6">
