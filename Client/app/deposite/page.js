@@ -62,8 +62,8 @@ const DataSpotDeposit = () => {
 
   // Form validation
   const isFormValid = () => {
-    if (!amount || parseFloat(amount) <= 9) {
-      setError('Please enter a valid amount greater than GHS 9');
+    if (!amount || parseFloat(amount) <= 4) {
+      setError('Please enter a valid amount greater than GHS 4');
       return false;
     }
     
