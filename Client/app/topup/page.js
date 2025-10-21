@@ -63,8 +63,8 @@ export default function DepositPage() {
   const handleDeposit = async (e) => {
     e.preventDefault();
     
-    if (!amount || amount <= 9) {
-      setError('Please enter a valid amount greater than 9 GHS.');
+    if (!amount || amount <= 4) {
+      setError('Please enter a valid amount greater than 4 GHS.');
       return;
     }
     
@@ -234,16 +234,16 @@ export default function DepositPage() {
                     type="number"
                     id="amount"
                     className="pl-12 pr-4 py-3 block w-full rounded-xl bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-semibold text-lg transition-all"
-                    placeholder="Enter amount (min. 10 GHS)"
+                    placeholder="Enter amount (min. 5 GHS)"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
-                    min="10"
+                    min="5"
                     step="0.01"
                     required
                   />
                 </div>
                 <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                  Minimum deposit: GHS 10.00
+                  Minimum deposit: GHS 5.00
                 </p>
               </div>
               
@@ -276,7 +276,7 @@ export default function DepositPage() {
               <button
                 type="button"
                 onClick={handleDeposit}
-                disabled={isLoading || !amount || amount <= 9}
+                disabled={isLoading || !amount || amount <= 4}
                 className="w-full flex items-center justify-center py-4 px-6 rounded-xl text-white bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 hover:from-blue-700 hover:to-blue-800 dark:hover:from-blue-600 dark:hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-base shadow-lg hover:shadow-xl"
               >
                 {isLoading ? (
