@@ -7,12 +7,12 @@ const BlockedDeviceSchema = new mongoose.Schema({
   ipAddress: { type: String },
   reason: { type: String },
   blockedAt: { type: Date, default: Date.now },
-  blockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Usercheapdata" }
+  blockedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Usernestdata" }
 });
 
 // Friend Registration Schema - for tracking registered friends
 const RegisteredFriendSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "Usercheapdata" },
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "Usernestdata" },
   name: { type: String },
   email: { type: String },
   phoneNumber: { type: String },
@@ -31,7 +31,7 @@ const UserSchema = new mongoose.Schema({
   referredBy: { type: String, default: null }, // Who referred this user
   
   // Friend registration tracking
-  registeredByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "Usercheapdata" }, // User who registered this user
+  registeredByUserId: { type: mongoose.Schema.Types.ObjectId, ref: "Usernestdata" }, // User who registered this user
   registeredFriends: [RegisteredFriendSchema], // Friends registered by this user
   
   createdAt: { type: Date, default: Date.now },
@@ -63,7 +63,7 @@ const UserSchema = new mongoose.Schema({
   },
   approvedBy: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: "Usercheapdata" 
+    ref: "Usernestdata" 
   },
   approvedAt: { 
     type: Date 
@@ -78,7 +78,7 @@ UserSchema.index({ approvalStatus: 1 });
 
 // Other schemas remain the same...
 const DataPurchaseSchema = new mongoose.Schema({
-  userId: { type: mongoose.Schema.Types.ObjectId, ref: "Usercheapdata", required: true }, 
+  userId: { type: mongoose.Schema.Types.ObjectId, ref: "Usernestdata", required: true }, 
   phoneNumber: { type: String, required: true }, 
   network: { type: String, enum: ["YELLO", "TELECEL", "AT_PREMIUM","airteltigo","at"], required: true },
   capacity: { type: Number, required: true }, 
@@ -206,7 +206,7 @@ const OrderReportSchema = new mongoose.Schema({
   },
   purchaseId: { 
     type: mongoose.Schema.Types.ObjectId, 
-    ref: "DataPurchase", 
+    ref: "DataPurchasenestdata", 
     required: true 
   },
   reason: { 
