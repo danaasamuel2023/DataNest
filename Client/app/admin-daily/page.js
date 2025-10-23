@@ -17,6 +17,7 @@ const AdminDashboard = () => {
   const [selectedItem, setSelectedItem] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+  const [authToken, setAuthToken] = useState(null);
   const [stats, setStats] = useState({
     totalOrders: 0,
     totalRevenue: 0,
@@ -26,7 +27,11 @@ const AdminDashboard = () => {
   });
   const [statusSummary, setStatusSummary] = useState([]);
 
-  const authToken = localStorage.getItem('authToken');
+  // Get auth token on mount (client-side only)
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    setAuthToken(token);
+  }, []);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-GH', {
@@ -61,6 +66,8 @@ const AdminDashboard = () => {
 
   // Fetch daily statistics
   const fetchDailyStatistics = async (date) => {
+    if (!authToken) return;
+    
     setStatsLoading(true);
     try {
       const response = await fetch(
@@ -93,6 +100,8 @@ const AdminDashboard = () => {
 
   // Fetch deposits
   const fetchDeposits = async (page = 1, search = '', status = '') => {
+    if (!authToken) return;
+    
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -128,6 +137,8 @@ const AdminDashboard = () => {
 
   // Fetch orders
   const fetchOrders = async (page = 1, search = '', status = '') => {
+    if (!authToken) return;
+    
     setLoading(true);
     try {
       const params = new URLSearchParams({
@@ -161,40 +172,50 @@ const AdminDashboard = () => {
   };
 
   useEffect(() => {
-    fetchDailyStatistics(selectedDate);
-  }, [selectedDate]);
+    if (authToken) {
+      fetchDailyStatistics(selectedDate);
+    }
+  }, [selectedDate, authToken]);
 
   useEffect(() => {
-    if (activeTab === 'deposits') {
-      fetchDeposits(1, searchTerm, filterStatus);
-    } else {
-      fetchOrders(1, searchTerm, filterStatus);
+    if (authToken) {
+      if (activeTab === 'deposits') {
+        fetchDeposits(1, searchTerm, filterStatus);
+      } else {
+        fetchOrders(1, searchTerm, filterStatus);
+      }
     }
-  }, [activeTab, filterStatus]);
+  }, [activeTab, filterStatus, authToken]);
 
   const handleSearch = (e) => {
     setSearchTerm(e.target.value);
-    if (activeTab === 'deposits') {
-      fetchDeposits(1, e.target.value, filterStatus);
-    } else {
-      fetchOrders(1, e.target.value, filterStatus);
+    if (authToken) {
+      if (activeTab === 'deposits') {
+        fetchDeposits(1, e.target.value, filterStatus);
+      } else {
+        fetchOrders(1, e.target.value, filterStatus);
+      }
     }
   };
 
   const handleStatusFilter = (status) => {
     setFilterStatus(status);
-    if (activeTab === 'deposits') {
-      fetchDeposits(1, searchTerm, status);
-    } else {
-      fetchOrders(1, searchTerm, status);
+    if (authToken) {
+      if (activeTab === 'deposits') {
+        fetchDeposits(1, searchTerm, status);
+      } else {
+        fetchOrders(1, searchTerm, status);
+      }
     }
   };
 
   const handlePageChange = (newPage) => {
-    if (activeTab === 'deposits') {
-      fetchDeposits(newPage, searchTerm, filterStatus);
-    } else {
-      fetchOrders(newPage, searchTerm, filterStatus);
+    if (authToken) {
+      if (activeTab === 'deposits') {
+        fetchDeposits(newPage, searchTerm, filterStatus);
+      } else {
+        fetchOrders(newPage, searchTerm, filterStatus);
+      }
     }
   };
 
@@ -307,6 +328,20 @@ const AdminDashboard = () => {
       </div>
     );
   };
+
+  // Show loading state while auth token is being retrieved
+  if (!authToken) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="inline-block animate-spin">
+            <RefreshCw className="w-8 h-8 text-blue-600" />
+          </div>
+          <p className="mt-2 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
