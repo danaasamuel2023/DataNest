@@ -1,528 +1,708 @@
 "use client";
 
 import React, { useState, useEffect } from 'react';
-import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { Calendar, ArrowUp, ArrowDown, Database, Users, Activity, RefreshCw } from 'lucide-react';
-import { useRouter } from 'next/navigation'; // Import for navigation
+import { Search, RefreshCw, X, ChevronLeft, ChevronRight, Eye } from 'lucide-react';
 
-// Fetch dashboard data
-const getDashboardData = async (date) => {
-  try {
-    // Get auth token from localStorage (only available on client-side)
-    const authToken = localStorage.getItem('authToken');
-    
-    if (!authToken) {
-      throw new Error('Authentication token not found');
-    }
-    
-    // Replace with your actual API endpoint
-    const response = await fetch(`https://datanest-lkyu.onrender.com/api/daily-summary?date=${date}`, {
-      headers: {
-        'x-auth-token': authToken
-      }
-    });
-    
-    if (!response.ok) {
-      // Handle 401 Unauthorized error
-      if (response.status === 401) {
-        const userData = JSON.parse(localStorage.getItem('userData'));
-        if (!userData || userData.role !== 'admin') {
-          // Redirect non-admin users on 401
-          throw new Error('unauthorized-redirect');
-        }
-      }
-      throw new Error(`Failed to fetch dashboard data: ${response.status}`);
-    }
-    
-    const data = await response.json();
-    
-    // Store user info if provided
-    if (data.user) {
-      localStorage.setItem('userData', JSON.stringify({
-        id: data.user._id,
-        name: data.user.name,
-        email: data.user.email,
-        role: data.user.role
-      }));
-    }
-    
-    return data;
-  } catch (error) {
-    console.error('Error fetching dashboard data:', error);
-    // Return mock data as fallback for preview purposes
-    if (error.message !== 'unauthorized-redirect') {
-      return {
-        date: date,
-        summary: {
-          totalOrders: 45,
-          totalRevenue: 2350.75,
-          totalDeposits: 3100.25,
-          totalCapacityGB: 125,
-          uniqueCustomers: 32
-        },
-        networkSummary: [
-          { network: 'YELLO', count: 25, totalGB: 62, revenue: 1200.50 },
-          { network: 'TELECEL', count: 15, totalGB: 45, revenue: 850.25 },
-          { network: 'AT_PREMIUM', count: 5, totalGB: 18, revenue: 300.00 }
-        ],
-        capacityDetails: [
-          { network: 'YELLO', capacity: 1, count: 5, totalGB: 5 },
-          { network: 'YELLO', capacity: 2, count: 10, totalGB: 20 },
-          { network: 'YELLO', capacity: 5, count: 6, totalGB: 30 },
-          { network: 'TELECEL', capacity: 2, count: 7, totalGB: 14 },
-          { network: 'TELECEL', capacity: 5, count: 3, totalGB: 15 },
-          { network: 'AT_PREMIUM', capacity: 3, count: 3, totalGB: 9 },
-          { network: 'AT_PREMIUM', capacity: 5, count: 1, totalGB: 5 }
-        ],
-        statusSummary: [
-          { status: 'completed', count: 38 },
-          { status: 'pending', count: 5 },
-          { status: 'processing', count: 2 }
-        ]
-      };
-    }
-    // Re-throw the error to handle in component
-    throw error;
-  }
-};
-
-const DailyDashboard = () => {
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+const AdminDashboard = () => {
+  const [activeTab, setActiveTab] = useState('deposits');
+  const [deposits, setDeposits] = useState([]);
+  const [orders, setOrders] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize] = useState(20);
+  const [totalPages, setTotalPages] = useState(1);
+  const [selectedItem, setSelectedItem] = useState(null);
+  const [showModal, setShowModal] = useState(false);
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
-  const [refreshing, setRefreshing] = useState(false);
-  const router = useRouter(); // Initialize router for navigation
-  
-  // Format currency for display (GHS - Ghanaian Cedi)
+  const [stats, setStats] = useState({
+    totalOrders: 0,
+    totalRevenue: 0,
+    totalDeposits: 0,
+    totalCapacityGB: 0,
+    uniqueCustomers: 0
+  });
+  const [statusSummary, setStatusSummary] = useState([]);
+
+  const authToken = localStorage.getItem('authToken');
+
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('en-GH', {
       style: 'currency',
-      currency: 'GHS',
-      minimumFractionDigits: 2
+      currency: 'GHS'
     }).format(amount);
   };
-  
-  const refreshData = async () => {
-    setRefreshing(true);
+
+  const formatDate = (date) => {
+    return new Date(date).toLocaleString('en-GH', {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  };
+
+  const getStatusColor = (status) => {
+    const colors = {
+      completed: 'bg-green-100 text-green-800',
+      pending: 'bg-yellow-100 text-yellow-800',
+      processing: 'bg-blue-100 text-blue-800',
+      failed: 'bg-red-100 text-red-800',
+      refunded: 'bg-purple-100 text-purple-800',
+      shipped: 'bg-indigo-100 text-indigo-800',
+      delivered: 'bg-teal-100 text-teal-800',
+      waiting: 'bg-orange-100 text-orange-800'
+    };
+    return colors[status] || 'bg-gray-100 text-gray-800';
+  };
+
+  // Fetch daily statistics
+  const fetchDailyStatistics = async (date) => {
+    setStatsLoading(true);
     try {
-      const dashboardData = await getDashboardData(selectedDate);
-      setData(dashboardData);
-      setError(null);
-    } catch (err) {
-      console.error('Failed to refresh data:', err);
-      if (err.message === 'unauthorized-redirect') {
-        router.push('/'); // Redirect to home page on auth error
-      } else {
-        setError(err.message);
-      }
+      const response = await fetch(
+        `https://datanest-lkyu.onrender.com/api/admin/daily-summary?date=${date}`,
+        {
+          headers: {
+            'x-auth-token': authToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to fetch daily statistics');
+
+      const data = await response.json();
+      setStats({
+        totalOrders: data.summary?.totalOrders || 0,
+        totalRevenue: data.summary?.totalRevenue || 0,
+        totalDeposits: data.summary?.totalDeposits || 0,
+        totalCapacityGB: data.summary?.totalCapacityGB || 0,
+        uniqueCustomers: data.summary?.uniqueCustomers || 0
+      });
+      setStatusSummary(data.statusSummary || []);
+    } catch (error) {
+      console.error('Error fetching daily statistics:', error);
     } finally {
-      setRefreshing(false);
+      setStatsLoading(false);
     }
   };
-  
-  useEffect(() => {
-    const fetchData = async () => {
-      setLoading(true);
-      try {
-        const dashboardData = await getDashboardData(selectedDate);
-        setData(dashboardData);
-        setError(null);
-      } catch (err) {
-        if (err.message === 'unauthorized-redirect') {
-          router.push('/'); // Redirect to home page on auth error
-        } else {
-          setError(err.message);
+
+  // Fetch deposits
+  const fetchDeposits = async (page = 1, search = '', status = '') => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page,
+        limit: pageSize,
+        type: 'deposit',
+        status: status || '',
+        search: search || ''
+      });
+
+      const response = await fetch(
+        `https://datanest-lkyu.onrender.com/api/admin/transactions?${params}`,
+        {
+          headers: {
+            'x-auth-token': authToken,
+            'Content-Type': 'application/json'
+          }
         }
-      } finally {
-        setLoading(false);
-      }
-    };
-    
-    fetchData();
-  }, [selectedDate, router]);
-  
-  // Array of colors for the charts
-  const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d'];
-  
-  // Status colors for better visualization
-  const STATUS_COLORS = {
-    'completed': '#4ade80', // Green
-    'pending': '#f97316',   // Orange
-    'processing': '#3b82f6', // Blue
-    'failed': '#ef4444',    // Red
-    'waiting': '#a855f7',   // Purple
-    'delivered': '#14b8a6'  // Teal
+      );
+
+      if (!response.ok) throw new Error('Failed to fetch deposits');
+
+      const data = await response.json();
+      setDeposits(data.transactions || []);
+      setTotalPages(data.totalPages || 1);
+      setCurrentPage(parseInt(page));
+    } catch (error) {
+      console.error('Error fetching deposits:', error);
+    } finally {
+      setLoading(false);
+    }
   };
-  
-  // Loading state with skeleton UI
-  if (loading) return (
-    <div className="p-6 bg-gray-50 min-h-screen animate-pulse">
-      <div className="h-8 bg-gray-200 rounded w-64 mb-6"></div>
-      <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
-        {[...Array(5)].map((_, i) => (
-          <div key={i} className="bg-gray-200 p-6 rounded-lg h-28"></div>
-        ))}
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-gray-200 p-6 rounded-lg h-64"></div>
-        <div className="bg-gray-200 p-6 rounded-lg h-64"></div>
-      </div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-gray-200 p-6 rounded-lg h-80"></div>
-        <div className="bg-gray-200 p-6 rounded-lg h-80"></div>
-      </div>
-    </div>
-  );
-  
-  // Error state
-  if (error) return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="bg-red-50 border border-red-200 text-red-800 rounded-lg p-4 mb-6">
-        <div className="flex items-center">
-          <svg className="w-5 h-5 mr-2 text-red-600" fill="currentColor" viewBox="0 0 20 20">
-            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-          </svg>
-          <h3 className="text-lg font-medium">Error loading dashboard data</h3>
+
+  // Fetch orders
+  const fetchOrders = async (page = 1, search = '', status = '') => {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        page,
+        limit: pageSize,
+        status: status || '',
+        phoneNumber: search || ''
+      });
+
+      const response = await fetch(
+        `https://datanest-lkyu.onrender.com/api/admin/orders?${params}`,
+        {
+          headers: {
+            'x-auth-token': authToken,
+            'Content-Type': 'application/json'
+          }
+        }
+      );
+
+      if (!response.ok) throw new Error('Failed to fetch orders');
+
+      const data = await response.json();
+      setOrders(data.orders || []);
+      setTotalPages(data.totalPages || 1);
+      setCurrentPage(parseInt(page));
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDailyStatistics(selectedDate);
+  }, [selectedDate]);
+
+  useEffect(() => {
+    if (activeTab === 'deposits') {
+      fetchDeposits(1, searchTerm, filterStatus);
+    } else {
+      fetchOrders(1, searchTerm, filterStatus);
+    }
+  }, [activeTab, filterStatus]);
+
+  const handleSearch = (e) => {
+    setSearchTerm(e.target.value);
+    if (activeTab === 'deposits') {
+      fetchDeposits(1, e.target.value, filterStatus);
+    } else {
+      fetchOrders(1, e.target.value, filterStatus);
+    }
+  };
+
+  const handleStatusFilter = (status) => {
+    setFilterStatus(status);
+    if (activeTab === 'deposits') {
+      fetchDeposits(1, searchTerm, status);
+    } else {
+      fetchOrders(1, searchTerm, status);
+    }
+  };
+
+  const handlePageChange = (newPage) => {
+    if (activeTab === 'deposits') {
+      fetchDeposits(newPage, searchTerm, filterStatus);
+    } else {
+      fetchOrders(newPage, searchTerm, filterStatus);
+    }
+  };
+
+  // Detail Modal Component
+  const DetailModal = ({ item, type, onClose }) => {
+    if (!item) return null;
+
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-lg max-w-2xl w-full max-h-96 overflow-y-auto">
+          <div className="sticky top-0 bg-gray-50 flex justify-between items-center p-6 border-b">
+            <h2 className="text-xl font-bold">
+              {type === 'deposit' ? 'Deposit Details' : 'Order Details'}
+            </h2>
+            <button onClick={onClose} className="text-gray-500 hover:text-gray-700">
+              <X className="w-6 h-6" />
+            </button>
+          </div>
+
+          <div className="p-6 space-y-4">
+            {type === 'deposit' ? (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Transaction Reference</p>
+                    <p className="font-semibold text-lg">{item.reference}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Gateway</p>
+                    <p className="font-semibold capitalize">{item.gateway}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Amount</p>
+                    <p className="font-semibold text-green-600 text-lg">
+                      {formatCurrency(item.amount)}
+                    </p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Status</p>
+                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(item.status)}`}>
+                      {item.status}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2">User Information</h3>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="text-gray-600">Name:</span> <span className="font-medium">{item.userId?.name || 'N/A'}</span></p>
+                    <p><span className="text-gray-600">Email:</span> <span className="font-medium">{item.userId?.email || 'N/A'}</span></p>
+                    <p><span className="text-gray-600">Phone:</span> <span className="font-medium">{item.userId?.phoneNumber || 'N/A'}</span></p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm text-gray-600">Date</p>
+                  <p className="font-medium">{formatDate(item.createdAt)}</p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Order Reference</p>
+                    <p className="font-semibold text-lg">{item.geonetReference}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Network</p>
+                    <p className="font-semibold text-lg">{item.network}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Data Package</p>
+                    <p className="font-semibold text-lg">{item.capacity} GB</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Price</p>
+                    <p className="font-semibold text-lg">{formatCurrency(item.price)}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <p className="text-sm text-gray-600">Phone Number</p>
+                    <p className="font-semibold">{item.phoneNumber}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-600">Status</p>
+                    <span className={`inline-block px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(item.status)}`}>
+                      {item.status}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-semibold mb-2">Customer Information</h3>
+                  <div className="space-y-2 text-sm">
+                    <p><span className="text-gray-600">Name:</span> <span className="font-medium">{item.userId?.name || 'N/A'}</span></p>
+                    <p><span className="text-gray-600">Email:</span> <span className="font-medium">{item.userId?.email || 'N/A'}</span></p>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-sm text-gray-600">Order Date</p>
+                  <p className="font-medium">{formatDate(item.createdAt)}</p>
+                </div>
+              </>
+            )}
+          </div>
         </div>
-        <p className="mt-2 text-sm">{error}</p>
-        <div className="mt-4">
-          <button 
-            onClick={refreshData}
-            className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-md text-sm font-medium flex items-center"
-          >
-            <RefreshCw className="w-4 h-4 mr-2" /> Try Again
-          </button>
-        </div>
       </div>
-    </div>
-  );
-  
-  if (!data) return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="bg-yellow-50 border border-yellow-200 text-yellow-800 rounded-lg p-4">
-        No data available. Please try another date.
-      </div>
-    </div>
-  );
-  
-  // Prepare data for the capacity breakdown chart
-  const prepareCapacityBreakdown = () => {
-    // Group capacity details by capacity size
-    const capacityGroups = {};
-    data.capacityDetails.forEach(item => {
-      if (!capacityGroups[item.capacity]) {
-        capacityGroups[item.capacity] = {
-          capacity: `${item.capacity}GB`,
-          count: 0
-        };
-      }
-      capacityGroups[item.capacity].count += item.count;
-    });
-    
-    return Object.values(capacityGroups).sort((a, b) => 
-      parseInt(a.capacity) - parseInt(b.capacity)
     );
   };
-  
-  const capacityBreakdown = prepareCapacityBreakdown();
-  
+
   return (
-    <div className="p-6 bg-gray-50 min-h-screen">
-      <div className="mb-6 flex flex-col md:flex-row md:justify-between md:items-center gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-800">Daily Business Summary</h1>
-          <p className="text-gray-600 text-sm mt-1">
-            View your daily metrics, sales, and performance indicators
-          </p>
+    <div className="min-h-screen bg-gray-50">
+      {/* Header */}
+      <div className="bg-white border-b border-gray-200 sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4">
+          <h1 className="text-3xl font-bold text-gray-900">Admin Dashboard</h1>
+          <p className="text-gray-600 text-sm mt-1">Manage deposits, orders and daily performance</p>
         </div>
-        
-        <div className="flex items-center space-x-4">
-          <div className="flex items-center bg-white rounded-lg shadow-sm border border-gray-200 p-2">
-            <Calendar className="h-5 w-5 text-gray-500 mr-2" />
+      </div>
+
+      {/* Daily Statistics */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center mb-6 gap-4">
+          <div>
+            <h2 className="text-2xl font-bold text-gray-900">Daily Statistics</h2>
+            <p className="text-sm text-gray-600 mt-1">View performance metrics for a specific date</p>
+          </div>
+          <div className="flex items-center space-x-2 bg-white p-2 rounded-lg border border-gray-300 shadow-sm">
+            <svg className="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h18M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+            </svg>
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="text-sm focus:outline-none"
+              className="focus:outline-none text-sm font-medium"
               aria-label="Select date"
             />
           </div>
-          
-          <button 
-            onClick={refreshData} 
-            disabled={refreshing}
-            className={`flex items-center space-x-2 py-2 px-4 rounded-lg ${
-              refreshing 
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                : 'bg-blue-600 text-white hover:bg-blue-700'
-            } transition-colors duration-200 shadow-sm`}
-          >
-            <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-            <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
-          </button>
         </div>
-      </div>
-      
-      {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 mb-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 transition-all duration-200 hover:shadow-md">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-sm text-gray-500 font-medium">Total Orders</h3>
-            <div className="p-2 bg-blue-50 rounded-lg">
-              <Activity className="h-5 w-5 text-blue-500" />
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          {/* Total Orders */}
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500 hover:shadow-lg transition-shadow">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Total Orders</p>
+                <p className="text-3xl font-bold text-gray-900 mt-2">{statsLoading ? '...' : stats.totalOrders}</p>
+              </div>
+              <div className="bg-blue-100 p-3 rounded-lg">
+                <svg className="w-6 h-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                </svg>
+              </div>
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-800">{data.summary.totalOrders}</p>
-          <div className="mt-2 text-xs text-gray-500">
-            {data.date}
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 transition-all duration-200 hover:shadow-md">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-sm text-gray-500 font-medium">Total Revenue</h3>
-            <div className="p-2 bg-green-50 rounded-lg">
-              <ArrowUp className="h-5 w-5 text-green-500" />
+
+          {/* Total Revenue */}
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-green-500 hover:shadow-lg transition-shadow">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Total Revenue</p>
+                <p className="text-2xl font-bold text-green-600 mt-2">
+                  {statsLoading ? '...' : formatCurrency(stats.totalRevenue)}
+                </p>
+              </div>
+              <div className="bg-green-100 p-3 rounded-lg">
+                <svg className="w-6 h-6 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-800">{formatCurrency(data.summary.totalRevenue)}</p>
-          <div className="mt-2 text-xs text-gray-500">
-            {data.date}
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 transition-all duration-200 hover:shadow-md">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-sm text-gray-500 font-medium">Total Deposits</h3>
-            <div className="p-2 bg-purple-50 rounded-lg">
-              <ArrowDown className="h-5 w-5 text-purple-500" />
+
+          {/* Total Deposits */}
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500 hover:shadow-lg transition-shadow">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Total Deposits</p>
+                <p className="text-2xl font-bold text-purple-600 mt-2">
+                  {statsLoading ? '...' : formatCurrency(stats.totalDeposits)}
+                </p>
+              </div>
+              <div className="bg-purple-100 p-3 rounded-lg">
+                <svg className="w-6 h-6 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+              </div>
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-800">{formatCurrency(data.summary.totalDeposits)}</p>
-          <div className="mt-2 text-xs text-gray-500">
-            {data.date}
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 transition-all duration-200 hover:shadow-md">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-sm text-gray-500 font-medium">Data Sold</h3>
-            <div className="p-2 bg-yellow-50 rounded-lg">
-              <Database className="h-5 w-5 text-yellow-500" />
+
+          {/* Data Sold */}
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-yellow-500 hover:shadow-lg transition-shadow">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Data Sold</p>
+                <p className="text-3xl font-bold text-yellow-600 mt-2">{statsLoading ? '...' : stats.totalCapacityGB} <span className="text-sm">GB</span></p>
+              </div>
+              <div className="bg-yellow-100 p-3 rounded-lg">
+                <svg className="w-6 h-6 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+              </div>
             </div>
           </div>
-          <p className="text-2xl font-bold text-gray-800">{data.summary.totalCapacityGB} <span className="text-sm font-normal">GB</span></p>
-          <div className="mt-2 text-xs text-gray-500">
-            {data.date}
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-4 transition-all duration-200 hover:shadow-md">
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="text-sm text-gray-500 font-medium">Unique Customers</h3>
-            <div className="p-2 bg-indigo-50 rounded-lg">
-              <Users className="h-5 w-5 text-indigo-500" />
-            </div>
-          </div>
-          <p className="text-2xl font-bold text-gray-800">{data.summary.uniqueCustomers}</p>
-          <div className="mt-2 text-xs text-gray-500">
-            {data.date}
-          </div>
-        </div>
-      </div>
-      
-      {/* Network Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 transition-all duration-200 hover:shadow-md">
-          <h2 className="text-lg font-semibold mb-4 text-gray-800">Network Performance</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead>
-                <tr>
-                  <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tl-lg">Network</th>
-                  <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Orders</th>
-                  <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Data (GB)</th>
-                  <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tr-lg">Revenue</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {data.networkSummary.map((item, index) => (
-                  <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: COLORS[index % COLORS.length] }}></div>
-                        <span className="text-sm font-medium text-gray-900">{item.network}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{item.count}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{item.totalGB}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">{formatCurrency(item.revenue)}</td>
-                  </tr>
-                ))}
-                <tr className="bg-gray-50">
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900">Total</td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right">
-                    {data.networkSummary.reduce((sum, item) => sum + item.count, 0)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right">
-                    {data.networkSummary.reduce((sum, item) => sum + item.totalGB, 0)}
-                  </td>
-                  <td className="px-6 py-4 whitespace-nowrap text-sm font-bold text-gray-900 text-right">
-                    {formatCurrency(data.networkSummary.reduce((sum, item) => sum + item.revenue, 0))}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 transition-all duration-200 hover:shadow-md">
-          <h2 className="text-lg font-semibold mb-4 text-gray-800">Network Distribution</h2>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={data.networkSummary}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="count"
-                  nameKey="network"
-                  label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                >
-                  {data.networkSummary.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip formatter={(value, name, props) => [`${value} orders`, props.payload.network]} />
-                <Legend layout="horizontal" verticalAlign="bottom" align="center" />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-      </div>
-      
-      {/* Data Capacity Breakdown */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 transition-all duration-200 hover:shadow-md">
-          <h2 className="text-lg font-semibold mb-4 text-gray-800">Data Package Distribution</h2>
-          <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={capacityBreakdown}
-                margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                <XAxis dataKey="capacity" />
-                <YAxis />
-                <Tooltip 
-                  formatter={(value) => [`${value} orders`, 'Orders']}
-                  labelFormatter={(value) => `Package Size: ${value}`}
-                  contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '8px', border: '1px solid #f0f0f0' }}
-                />
-                <Legend />
-                <Bar dataKey="count" name="Number of Orders" fill="#8884d8" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </div>
-        
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 transition-all duration-200 hover:shadow-md">
-          <h2 className="text-lg font-semibold mb-4 text-gray-800">Package Details By Network</h2>
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-gray-200">
-              <thead>
-                <tr>
-                  <th className="px-6 py-3 bg-gray-50 text-left text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tl-lg">Network</th>
-                  <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Package Size</th>
-                  <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Orders</th>
-                  <th className="px-6 py-3 bg-gray-50 text-right text-xs font-medium text-gray-500 uppercase tracking-wider rounded-tr-lg">Total Data</th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-gray-200">
-                {data.capacityDetails.map((item, index) => (
-                  <tr key={index} className="hover:bg-gray-50 transition-colors duration-150">
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="flex items-center">
-                        <div className="w-3 h-3 rounded-full mr-2" style={{ 
-                          backgroundColor: COLORS[data.networkSummary.findIndex(n => n.network === item.network) % COLORS.length] 
-                        }}></div>
-                        <span className="text-sm font-medium text-gray-900">{item.network}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{item.capacity} GB</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 text-right">{item.count}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 text-right">{item.totalGB} GB</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      
-      {/* Order Status */}
-      <div className="grid grid-cols-1 mb-6">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 transition-all duration-200 hover:shadow-md">
-          <h2 className="text-lg font-semibold mb-4 text-gray-800">Order Status Summary</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={data.statusSummary}
-                  margin={{ top: 20, right: 30, left: 20, bottom: 5 }}
-                >
-                  <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-                  <XAxis dataKey="status" />
-                  <YAxis />
-                  <Tooltip 
-                    formatter={(value) => [`${value} orders`, 'Count']}
-                    contentStyle={{ backgroundColor: 'rgba(255, 255, 255, 0.95)', borderRadius: '8px', border: '1px solid #f0f0f0' }}
-                  />
-                  <Legend />
-                  <Bar dataKey="count" name="Orders" radius={[4, 4, 0, 0]}>
-                    {data.statusSummary.map((entry, index) => (
-                      <Cell 
-                        key={`cell-${index}`} 
-                        fill={STATUS_COLORS[entry.status] || '#82ca9d'} 
-                      />
-                    ))}
-                  </Bar>
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            
-            <div className="flex flex-col justify-center">
-              <div className="grid grid-cols-2 gap-4">
-                {data.statusSummary.map((item, index) => (
-                  <div key={index} className="bg-gray-50 rounded-lg p-4 flex items-center">
-                    <div 
-                      className="w-4 h-4 rounded-full mr-3" 
-                      style={{ backgroundColor: STATUS_COLORS[item.status] || '#82ca9d' }}
-                    ></div>
-                    <div>
-                      <div className="text-sm font-medium capitalize">{item.status}</div>
-                      <div className="text-2xl font-bold">{item.count}</div>
-                      <div className="text-xs text-gray-500">
-                        {((item.count / data.summary.totalOrders) * 100).toFixed(1)}% of total
-                      </div>
-                    </div>
-                  </div>
-                ))}
+
+          {/* Unique Customers */}
+          <div className="bg-white rounded-lg shadow p-6 border-l-4 border-indigo-500 hover:shadow-lg transition-shadow">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-gray-600 text-sm font-medium">Unique Customers</p>
+                <p className="text-3xl font-bold text-indigo-600 mt-2">{statsLoading ? '...' : stats.uniqueCustomers}</p>
+              </div>
+              <div className="bg-indigo-100 p-3 rounded-lg">
+                <svg className="w-6 h-6 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.856-1.487M15 10a3 3 0 11-6 0 3 3 0 016 0zM6 20h12a6 6 0 00-6-6 6 6 0 00-6 6z" />
+                </svg>
               </div>
             </div>
           </div>
         </div>
+
+        {/* Order Status Summary */}
+        {statusSummary.length > 0 && (
+          <div className="bg-white rounded-lg shadow p-6 mb-8">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Order Status Breakdown</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
+              {statusSummary.map((status, index) => (
+                <div key={index} className="bg-gray-50 rounded-lg p-4">
+                  <p className="text-sm text-gray-600 capitalize font-medium">{status.status}</p>
+                  <p className="text-2xl font-bold text-gray-900 mt-2">{status.count}</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    {stats.totalOrders > 0 ? `${((status.count / stats.totalOrders) * 100).toFixed(1)}%` : '0%'}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
-      
-      <div className="text-center text-xs text-gray-500 mt-8">
-        <p>Data last updated: {new Date().toLocaleString()}</p>
+
+      {/* Tab Navigation */}
+      <div className="bg-white border-b border-gray-200 sticky top-16 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex space-x-8">
+            <button
+              onClick={() => setActiveTab('deposits')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'deposits'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              Deposits & Transactions
+            </button>
+            <button
+              onClick={() => setActiveTab('orders')}
+              className={`py-4 px-1 border-b-2 font-medium text-sm transition-colors ${
+                activeTab === 'orders'
+                  ? 'border-blue-500 text-blue-600'
+                  : 'border-transparent text-gray-600 hover:text-gray-900 hover:border-gray-300'
+              }`}
+            >
+              Data Orders
+            </button>
+          </div>
+        </div>
       </div>
+
+      {/* Main Content */}
+      <div className="bg-gray-50">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          {/* Search and Filter */}
+          <div className="mb-6 flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+              <input
+                type="text"
+                placeholder={activeTab === 'deposits' ? 'Search by reference or user...' : 'Search by phone number...'}
+                value={searchTerm}
+                onChange={handleSearch}
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <select
+              value={filterStatus}
+              onChange={(e) => handleStatusFilter(e.target.value)}
+              className="px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="">All Status</option>
+              <option value="completed">Completed</option>
+              <option value="pending">Pending</option>
+              <option value="processing">Processing</option>
+              <option value="failed">Failed</option>
+              {activeTab === 'deposits' && <option value="refunded">Refunded</option>}
+            </select>
+
+            <button
+              onClick={() => {
+                if (activeTab === 'deposits') {
+                  fetchDeposits(1, searchTerm, filterStatus);
+                } else {
+                  fetchOrders(1, searchTerm, filterStatus);
+                }
+              }}
+              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            >
+              <RefreshCw className="w-4 h-4" />
+              Refresh
+            </button>
+          </div>
+
+          {/* Loading State */}
+          {loading && (
+            <div className="text-center py-12">
+              <div className="inline-block animate-spin">
+                <RefreshCw className="w-8 h-8 text-blue-600" />
+              </div>
+              <p className="mt-2 text-gray-600">Loading...</p>
+            </div>
+          )}
+
+          {/* Deposits Table */}
+          {!loading && activeTab === 'deposits' && (
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Reference</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">User</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Amount</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Gateway</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Date</th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {deposits.length > 0 ? (
+                      deposits.map((deposit) => (
+                        <tr key={deposit._id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <span className="font-mono text-sm font-semibold text-blue-600">{deposit.reference}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm">
+                              <p className="font-medium text-gray-900">{deposit.userId?.name || 'Unknown'}</p>
+                              <p className="text-gray-500">{deposit.userId?.phoneNumber || '-'}</p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="font-semibold text-green-600">{formatCurrency(deposit.amount)}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="capitalize text-sm text-gray-700">{deposit.gateway}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(deposit.status)}`}>
+                              {deposit.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            {formatDate(deposit.createdAt)}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button
+                              onClick={() => {
+                                setSelectedItem(deposit);
+                                setShowModal(true);
+                              }}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              <Eye className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-8 text-center text-gray-500">
+                          No deposits found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Orders Table */}
+          {!loading && activeTab === 'orders' && (
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full">
+                  <thead className="bg-gray-50 border-b border-gray-200">
+                    <tr>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Ref ID</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Customer</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Network</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Package</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Amount</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Status</th>
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-700 uppercase">Date</th>
+                      <th className="px-6 py-3 text-center text-xs font-medium text-gray-700 uppercase">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
+                    {orders.length > 0 ? (
+                      orders.map((order) => (
+                        <tr key={order._id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <span className="font-mono text-sm font-semibold text-purple-600">{order.geonetReference}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="text-sm">
+                              <p className="font-medium text-gray-900">{order.userId?.name || 'Unknown'}</p>
+                              <p className="text-gray-500">{order.phoneNumber}</p>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="font-semibold text-gray-900">{order.network}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="text-sm text-gray-700">{order.capacity} GB</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className="font-semibold text-blue-600">{formatCurrency(order.price)}</span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <span className={`px-3 py-1 rounded-full text-xs font-medium ${getStatusColor(order.status)}`}>
+                              {order.status}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            {formatDate(order.createdAt)}
+                          </td>
+                          <td className="px-6 py-4 text-center">
+                            <button
+                              onClick={() => {
+                                setSelectedItem(order);
+                                setShowModal(true);
+                              }}
+                              className="text-blue-600 hover:text-blue-900"
+                            >
+                              <Eye className="w-5 h-5" />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                          No orders found
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Pagination */}
+          {!loading && (deposits.length > 0 || orders.length > 0) && (
+            <div className="mt-6 flex items-center justify-between">
+              <div className="text-sm text-gray-600">
+                Page {currentPage} of {totalPages}
+              </div>
+              <div className="flex gap-2">
+                <button
+                  onClick={() => handlePageChange(currentPage - 1)}
+                  disabled={currentPage === 1}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <button
+                  onClick={() => handlePageChange(currentPage + 1)}
+                  disabled={currentPage === totalPages}
+                  className="p-2 border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Detail Modal */}
+      {showModal && (
+        <DetailModal
+          item={selectedItem}
+          type={activeTab === 'deposits' ? 'deposit' : 'order'}
+          onClose={() => {
+            setShowModal(false);
+            setSelectedItem(null);
+          }}
+        />
+      )}
     </div>
   );
 };
 
-export default DailyDashboard;
+export default AdminDashboard;
