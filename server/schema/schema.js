@@ -97,6 +97,75 @@ const DataPurchaseSchema = new mongoose.Schema({
  
 });
 
+
+// ========== ADD THIS TO YOUR SCHEMA FILE ==========
+// Enhanced Transaction Audit Schema (Add to schema.js)
+
+const TransactionAuditSchema = new mongoose.Schema({
+  userId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Usernestdata',
+    required: true
+  },
+  transactionType: {
+    type: String,
+    enum: ['deposit', 'withdrawal', 'data-purchase', 'refund', 'admin-credit', 'admin-deduction'],
+    required: true
+  },
+  amount: {
+    type: Number,
+    required: true
+  },
+  balanceBefore: {
+    type: Number,
+    required: true
+  },
+  balanceAfter: {
+    type: Number,
+    required: true
+  },
+  paymentMethod: {
+    type: String,
+    enum: ['paystack', 'wallet', 'manual', 'admin'],
+    default: 'wallet'
+  },
+  paystackReference: {
+    type: String,
+    default: null
+  },
+  status: {
+    type: String,
+    enum: ['pending', 'completed', 'failed'],
+    default: 'pending'
+  },
+  relatedOrderId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'DataPurchasenestdata',
+    default: null
+  },
+  description: String,
+  initiatedBy: {
+    type: String,
+    enum: ['user', 'admin', 'system'],
+    default: 'user'
+  },
+  adminId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Usernestdata',
+    default: null
+  },
+  ipAddress: String,
+  userAgent: String,
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
+
+TransactionAuditSchema.index({ userId: 1, createdAt: -1 });
+TransactionAuditSchema.index({ paystackReference: 1 });
+TransactionAuditSchema.index({ status: 1, createdAt: -1 });
+
 const TransactionSchema = new mongoose.Schema({
   userId: {
     type: mongoose.Schema.Types.ObjectId,
@@ -248,5 +317,7 @@ const ReferralBonus = mongoose.model("ReferralBonusnestdata", ReferralBonusSchem
 const ApiKey = mongoose.model('ApiKeydatahusle', apiKeySchema);
 const DataInventory = mongoose.model("DataInventorynestdata", DataInventorySchema);
 const OrderReport = mongoose.model("OrderReporthustle", OrderReportSchema);
+const TransactionAudit = mongoose.model('TransactionAudit', TransactionAuditSchema);
 
-module.exports = { User, DataPurchase, Transaction, ReferralBonus, ApiKey, DataInventory, OrderReport };
+
+module.exports = { User, DataPurchase, Transaction, ReferralBonus, ApiKey, DataInventory, OrderReport, TransactionAudit };

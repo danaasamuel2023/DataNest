@@ -1,19 +1,17 @@
+// ==================== UPDATED ADMIN ROUTES WITH TRANSACTION AUDIT ====================
+// Replace your entire admin routes file with this updated version
+
 const express = require('express');
 const router = express.Router();
-const { User, DataPurchase, Transaction, ReferralBonus,DataInventory } = require('../schema/schema');
+const { User, DataPurchase, Transaction, ReferralBonus, DataInventory, TransactionAudit } = require('../schema/schema');
 const mongoose = require('mongoose');
 const auth = require('../middlewareUser/middleware');
 const adminAuth = require('../adminMiddleware/middleware');
 const axios = require('axios');
-const PAYSTACK_SECRET_KEY = 'sk_live_0fba72fb9c4fc71200d2e0cdbb4f2b37c1de396c'; 
-
-
-
-// Middleware to check if user is admin
-
-// const mongoose = require('mongoose');
+const PAYSTACK_SECRET_KEY = 'sk_live_0fba72fb9c4fc71200d2e0cdbb4f2b37c1de396c';
 const ARKESEL_API_KEY = 'QkNhS0l2ZUZNeUdweEtmYVRUREg';
 
+// ==================== SMS HELPER FUNCTION ====================
 const sendSMS = async (phoneNumber, message, options = {}) => {
   const {
     scheduleTime = null,
@@ -21,12 +19,10 @@ const sendSMS = async (phoneNumber, message, options = {}) => {
     senderID = 'Bundle'
   } = options;
 
-  // Input validation
   if (!phoneNumber || !message) {
     throw new Error('Phone number and message are required');
   }
 
-  // Base parameters
   const params = {
     action: 'send-sms',
     api_key: ARKESEL_API_KEY,
@@ -35,7 +31,6 @@ const sendSMS = async (phoneNumber, message, options = {}) => {
     sms: message
   };
 
-  // Add optional parameters
   if (scheduleTime) {
     params.schedule = scheduleTime;
   }
@@ -44,7 +39,6 @@ const sendSMS = async (phoneNumber, message, options = {}) => {
     params.use_case = useCase;
   }
 
-  // Add Nigerian use case if phone number starts with 234
   if (phoneNumber.startsWith('234') && !useCase) {
     params.use_case = 'transactional';
   }
@@ -52,10 +46,9 @@ const sendSMS = async (phoneNumber, message, options = {}) => {
   try {
     const response = await axios.get('https://sms.arkesel.com/sms/api', {
       params,
-      timeout: 10000 // 10 second timeout
+      timeout: 10000
     });
 
-    // Map error codes to meaningful messages
     const errorCodes = {
       '100': 'Bad gateway request',
       '101': 'Wrong action',
@@ -76,8 +69,7 @@ const sendSMS = async (phoneNumber, message, options = {}) => {
     console.log('SMS sent successfully:', {
       to: phoneNumber,
       status: response.data.code,
-      balance: response.data.balance,
-      mainBalance: response.data.main_balance
+      balance: response.data.balance
     });
 
     return {
@@ -86,23 +78,7 @@ const sendSMS = async (phoneNumber, message, options = {}) => {
     };
 
   } catch (error) {
-    // Handle specific error types
-    if (error.response) {
-      // The request was made and the server responded with a status code
-      // that falls out of the range of 2xx
-      console.error('SMS API responded with error:', {
-        status: error.response.status,
-        data: error.response.data
-      });
-    } else if (error.request) {
-      // The request was made but no response was received
-      console.error('No response received from SMS API:', error.message);
-    } else {
-      // Something happened in setting up the request that triggered an Error
-      console.error('SMS request setup error:', error.message);
-    }
-
-    // Instead of swallowing the error, return error details
+    console.error('SMS error:', error.message);
     return {
       success: false,
       error: {
@@ -114,13 +90,8 @@ const sendSMS = async (phoneNumber, message, options = {}) => {
   }
 };
 
-
-/**
- * @route   GET /api/admin/users
- * @desc    Get all users
- * @access  Admin
- */
-router.get('/users',auth, adminAuth, async (req, res) => {
+// ==================== GET ALL USERS ====================
+router.get('/users', auth, adminAuth, async (req, res) => {
   try {
     const { page = 1, limit = 10, search = '' } = req.query;
     
@@ -151,16 +122,12 @@ router.get('/users',auth, adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   GET /api/admin/users/:id
- * @desc    Get user by ID
- * @access  Admin
- */
-router.get('/users/:id',auth, adminAuth, async (req, res) => {
+// ==================== GET USER BY ID ====================
+router.get('/users/:id', auth, adminAuth, async (req, res) => {
   try {
     const user = await User.findById(req.params.id).select('-password');
     
@@ -174,20 +141,15 @@ router.get('/users/:id',auth, adminAuth, async (req, res) => {
     if (err.kind === 'ObjectId') {
       return res.status(404).json({ msg: 'User not found' });
     }
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   PUT /api/admin/users/:id
- * @desc    Update user details
- * @access  Admin
- */
-router.put('/users/:id',auth, adminAuth, async (req, res) => {
+// ==================== UPDATE USER DETAILS ====================
+router.put('/users/:id', auth, adminAuth, async (req, res) => {
   try {
     const { name, email, phoneNumber, role, walletBalance, referralCode } = req.body;
     
-    // Build user object
     const userFields = {};
     if (name) userFields.name = name;
     if (email) userFields.email = email;
@@ -212,18 +174,14 @@ router.put('/users/:id',auth, adminAuth, async (req, res) => {
     if (err.kind === 'ObjectId') {
       return res.status(404).json({ msg: 'User not found' });
     }
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   PUT /api/admin/users/:id/add-money
- * @desc    Add money to user wallet
- * @access  Admin
- */
-router.put('/users/:id/add-money',auth, adminAuth, async (req, res) => {
+// ==================== ADD MONEY (UPDATED WITH AUDIT) ====================
+router.put('/users/:id/add-money', auth, adminAuth, async (req, res) => {
   try {
-    const { amount } = req.body;
+    const { amount, reason } = req.body;
     
     if (!amount || amount <= 0) {
       return res.status(400).json({ msg: 'Please provide a valid amount' });
@@ -233,7 +191,6 @@ router.put('/users/:id/add-money',auth, adminAuth, async (req, res) => {
     session.startTransaction();
     
     try {
-      // Find user and update wallet balance
       const user = await User.findById(req.params.id).session(session);
       
       if (!user) {
@@ -242,29 +199,52 @@ router.put('/users/:id/add-money',auth, adminAuth, async (req, res) => {
         return res.status(404).json({ msg: 'User not found' });
       }
       
-      // Update wallet balance
+      const balanceBefore = user.walletBalance;
       user.walletBalance += parseFloat(amount);
       await user.save({ session });
       
-      // Create transaction record
+      // Create Transaction record
       const transaction = new Transaction({
         userId: user._id,
         type: 'deposit',
         amount: parseFloat(amount),
         status: 'completed',
-        reference: `ADMIN-${Date.now()}`,
+        reference: `ADMIN-DEPOSIT-${Date.now()}`,
         gateway: 'admin-deposit'
       });
       
       await transaction.save({ session });
       
+      // Create TransactionAudit record
+      const auditEntry = new TransactionAudit({
+        userId: user._id,
+        transactionType: 'admin-credit',
+        amount: parseFloat(amount),
+        balanceBefore,
+        balanceAfter: user.walletBalance,
+        paymentMethod: 'admin',
+        status: 'completed',
+        description: reason || `Admin credit: GHS ${amount}`,
+        initiatedBy: 'admin',
+        adminId: req.user.id,
+        relatedOrderId: null
+      });
+      
+      await auditEntry.save({ session });
+      
       await session.commitTransaction();
       session.endSession();
       
       res.json({
-        msg: `Successfully added ${amount} to ${user.name}'s wallet`,
-        currentBalance: user.walletBalance,
-        transaction
+        success: true,
+        msg: `Successfully added GHS${amount} to ${user.name}'s wallet`,
+        data: {
+          currentBalance: user.walletBalance,
+          previousBalance: balanceBefore,
+          amount: parseFloat(amount),
+          transactionId: transaction._id,
+          auditId: auditEntry._id
+        }
       });
     } catch (error) {
       await session.abortTransaction();
@@ -273,16 +253,11 @@ router.put('/users/:id/add-money',auth, adminAuth, async (req, res) => {
     }
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-
-/**
- * @route   PUT /api/admin/users/:id/deduct-money
- * @desc    Deduct money from user wallet
- * @access  Admin
- */
+// ==================== DEDUCT MONEY (UPDATED WITH AUDIT) ====================
 router.put('/users/:id/deduct-money', auth, adminAuth, async (req, res) => {
   try {
     const { amount, reason } = req.body;
@@ -295,7 +270,6 @@ router.put('/users/:id/deduct-money', auth, adminAuth, async (req, res) => {
     session.startTransaction();
     
     try {
-      // Find user and update wallet balance
       const user = await User.findById(req.params.id).session(session);
       
       if (!user) {
@@ -304,7 +278,6 @@ router.put('/users/:id/deduct-money', auth, adminAuth, async (req, res) => {
         return res.status(404).json({ msg: 'User not found' });
       }
       
-      // Check if user has sufficient balance
       if (user.walletBalance < parseFloat(amount)) {
         await session.abortTransaction();
         session.endSession();
@@ -315,28 +288,40 @@ router.put('/users/:id/deduct-money', auth, adminAuth, async (req, res) => {
         });
       }
       
-      // Update wallet balance
+      const balanceBefore = user.walletBalance;
       user.walletBalance -= parseFloat(amount);
       await user.save({ session });
       
-      // Create transaction record
+      // Create Transaction record
       const transaction = new Transaction({
         userId: user._id,
         type: 'withdrawal',
         amount: parseFloat(amount),
         status: 'completed',
         reference: `ADMIN-DEDUCT-${Date.now()}`,
-        gateway: 'admin-deduction',
-        metadata: {
-          reason: reason || 'Administrative deduction',
-          adminId: req.user.id,
-          previousBalance: user.walletBalance + parseFloat(amount)
-        }
+        gateway: 'admin-deduction'
       });
       
       await transaction.save({ session });
       
-      // Optional: Send notification to user
+      // Create TransactionAudit record
+      const auditEntry = new TransactionAudit({
+        userId: user._id,
+        transactionType: 'admin-deduction',
+        amount: parseFloat(amount),
+        balanceBefore,
+        balanceAfter: user.walletBalance,
+        paymentMethod: 'admin',
+        status: 'completed',
+        description: reason || `Admin deduction: GHS ${amount}`,
+        initiatedBy: 'admin',
+        adminId: req.user.id,
+        relatedOrderId: null
+      });
+      
+      await auditEntry.save({ session });
+      
+      // Send SMS notification
       try {
         if (user.phoneNumber) {
           const formattedPhone = user.phoneNumber.replace(/^\+/, '');
@@ -349,16 +334,21 @@ router.put('/users/:id/deduct-money', auth, adminAuth, async (req, res) => {
         }
       } catch (smsError) {
         console.error('Failed to send deduction SMS:', smsError.message);
-        // Continue with the transaction even if SMS fails
       }
       
       await session.commitTransaction();
       session.endSession();
       
       res.json({
-        msg: `Successfully deducted ${amount} from ${user.name}'s wallet`,
-        currentBalance: user.walletBalance,
-        transaction
+        success: true,
+        msg: `Successfully deducted GHS${amount} from ${user.name}'s wallet`,
+        data: {
+          currentBalance: user.walletBalance,
+          previousBalance: balanceBefore,
+          amount: parseFloat(amount),
+          transactionId: transaction._id,
+          auditId: auditEntry._id
+        }
       });
     } catch (error) {
       await session.abortTransaction();
@@ -367,22 +357,17 @@ router.put('/users/:id/deduct-money', auth, adminAuth, async (req, res) => {
     }
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   DELETE /api/admin/users/:id
- * @desc    Delete user
- * @access  Admin
- */
-router.delete('/users/:id',auth, adminAuth, async (req, res) => {
+// ==================== DELETE USER ====================
+router.delete('/users/:id', auth, adminAuth, async (req, res) => {
   try {
     const session = await mongoose.startSession();
     session.startTransaction();
     
     try {
-      // Check if user exists
       const user = await User.findById(req.params.id).session(session);
       
       if (!user) {
@@ -391,7 +376,6 @@ router.delete('/users/:id',auth, adminAuth, async (req, res) => {
         return res.status(404).json({ msg: 'User not found' });
       }
       
-      // Delete related records
       await Transaction.deleteMany({ userId: req.params.id }).session(session);
       await DataPurchase.deleteMany({ userId: req.params.id }).session(session);
       await ReferralBonus.deleteMany({ 
@@ -401,7 +385,6 @@ router.delete('/users/:id',auth, adminAuth, async (req, res) => {
         ]
       }).session(session);
       
-      // Delete user
       await User.findByIdAndDelete(req.params.id).session(session);
       
       await session.commitTransaction();
@@ -418,16 +401,283 @@ router.delete('/users/:id',auth, adminAuth, async (req, res) => {
     if (err.kind === 'ObjectId') {
       return res.status(404).json({ msg: 'User not found' });
     }
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   GET /api/admin/orders
- * @desc    Get all data purchase orders
- * @access  Admin
- */
-router.get('/orders',auth, adminAuth, async (req, res) => {
+// ==================== NEW AUDIT ROUTES ====================
+
+// ROUTE 1: TODAY'S TRANSACTIONS
+router.get('/today-transactions', auth, adminAuth, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const todayTransactions = await TransactionAudit.find({
+      createdAt: { $gte: today, $lt: tomorrow }
+    })
+    .populate('userId', 'name email phoneNumber walletBalance')
+    .populate('adminId', 'name email')
+    .sort({ createdAt: -1 });
+
+    const summary = {
+      totalTransactions: todayTransactions.length,
+      totalAmount: 0,
+      byType: {},
+      byStatus: {},
+      byPaymentMethod: {},
+      transactions: []
+    };
+
+    todayTransactions.forEach(txn => {
+      summary.totalAmount += txn.amount;
+
+      if (!summary.byType[txn.transactionType]) {
+        summary.byType[txn.transactionType] = { count: 0, total: 0 };
+      }
+      summary.byType[txn.transactionType].count += 1;
+      summary.byType[txn.transactionType].total += txn.amount;
+
+      if (!summary.byStatus[txn.status]) {
+        summary.byStatus[txn.status] = { count: 0, total: 0 };
+      }
+      summary.byStatus[txn.status].count += 1;
+      summary.byStatus[txn.status].total += txn.amount;
+
+      if (!summary.byPaymentMethod[txn.paymentMethod]) {
+        summary.byPaymentMethod[txn.paymentMethod] = { count: 0, total: 0 };
+      }
+      summary.byPaymentMethod[txn.paymentMethod].count += 1;
+      summary.byPaymentMethod[txn.paymentMethod].total += txn.amount;
+    });
+
+    summary.transactions = todayTransactions.map(txn => ({
+      id: txn._id,
+      user: {
+        id: txn.userId?._id,
+        name: txn.userId?.name || 'Unknown',
+        email: txn.userId?.email,
+        phone: txn.userId?.phoneNumber
+      },
+      type: txn.transactionType,
+      amount: txn.amount,
+      balanceBefore: txn.balanceBefore,
+      balanceAfter: txn.balanceAfter,
+      paymentMethod: txn.paymentMethod,
+      paystackReference: txn.paystackReference || 'N/A',
+      status: txn.status,
+      description: txn.description,
+      initiatedBy: txn.initiatedBy,
+      timestamp: txn.createdAt,
+      admin: txn.adminId ? txn.adminId.name : 'System'
+    }));
+
+    res.json({
+      status: 'success',
+      data: {
+        date: today.toISOString().split('T')[0],
+        summary,
+        transactions: summary.transactions
+      }
+    });
+
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch today\'s transactions',
+      details: error.message
+    });
+  }
+});
+
+// ROUTE 2: USER AUDIT TRAIL
+router.get('/user-audit/:userId', auth, adminAuth, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { limit = 50, page = 1, status } = req.query;
+
+    const filter = { userId };
+    if (status) {
+      filter.status = status;
+    }
+
+    const auditTrail = await TransactionAudit.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(Number(limit))
+      .skip((Number(page) - 1) * Number(limit));
+
+    const total = await TransactionAudit.countDocuments(filter);
+
+    const balanceProgression = auditTrail.map(txn => ({
+      id: txn._id,
+      timestamp: txn.createdAt,
+      type: txn.transactionType,
+      amount: txn.amount,
+      balanceBefore: txn.balanceBefore,
+      balanceAfter: txn.balanceAfter,
+      change: txn.balanceAfter - txn.balanceBefore,
+      status: txn.status,
+      paymentMethod: txn.paymentMethod,
+      paystackRef: txn.paystackReference,
+      description: txn.description,
+      initiatedBy: txn.initiatedBy
+    }));
+
+    res.json({
+      status: 'success',
+      data: {
+        auditTrail: balanceProgression,
+        pagination: {
+          currentPage: Number(page),
+          totalPages: Math.ceil(total / Number(limit)),
+          total
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch audit trail',
+      details: error.message
+    });
+  }
+});
+
+// ROUTE 3: SUSPICIOUS ACCOUNTS
+router.get('/suspicious-accounts', auth, adminAuth, async (req, res) => {
+  try {
+    const suspiciousUsers = await User.aggregate([
+      { $match: { walletBalance: { $gt: 0 } } },
+      {
+        $lookup: {
+          from: 'transactionaudits',
+          localField: '_id',
+          foreignField: 'userId',
+          as: 'transactions'
+        }
+      },
+      {
+        $addFields: {
+          depositTransactions: {
+            $filter: {
+              input: '$transactions',
+              as: 'txn',
+              cond: {
+                $and: [
+                  { $eq: ['$$txn.transactionType', 'deposit'] },
+                  { $eq: ['$$txn.status', 'completed'] }
+                ]
+              }
+            }
+          }
+        }
+      },
+      {
+        $match: {
+          $expr: { $eq: [{ $size: '$depositTransactions' }, 0] },
+          walletBalance: { $gt: 0 }
+        }
+      },
+      {
+        $project: {
+          _id: 1,
+          name: 1,
+          email: 1,
+          phoneNumber: 1,
+          walletBalance: 1,
+          createdAt: 1,
+          transactionCount: { $size: '$transactions' }
+        }
+      },
+      { $sort: { walletBalance: -1 } }
+    ]);
+
+    res.json({
+      status: 'success',
+      data: {
+        message: 'Accounts with balance but no verified deposits',
+        count: suspiciousUsers.length,
+        accounts: suspiciousUsers,
+        warning: suspiciousUsers.length > 0 ? `Found ${suspiciousUsers.length} suspicious accounts that need review` : 'No suspicious accounts found'
+      }
+    });
+
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch suspicious accounts',
+      details: error.message
+    });
+  }
+});
+
+// ROUTE 4: TRANSACTION STATISTICS
+router.get('/transaction-stats', auth, adminAuth, async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const tomorrow = new Date(today);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const typeStats = await TransactionAudit.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $group: {
+          _id: '$transactionType',
+          count: { $sum: 1 },
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    const statusStats = await TransactionAudit.aggregate([
+      {
+        $match: {
+          createdAt: { $gte: today, $lt: tomorrow }
+        }
+      },
+      {
+        $group: {
+          _id: '$status',
+          count: { $sum: 1 },
+          total: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    res.json({
+      status: 'success',
+      data: {
+        date: today.toISOString().split('T')[0],
+        byType: typeStats,
+        byStatus: statusStats
+      }
+    });
+
+  } catch (error) {
+    console.error(error.message);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to fetch transaction stats',
+      details: error.message
+    });
+  }
+});
+
+// ==================== EXISTING ORDERS ROUTES ====================
+
+// GET ALL ORDERS
+router.get('/orders', auth, adminAuth, async (req, res) => {
   try {
     const { 
       page = 1, 
@@ -439,20 +689,18 @@ router.get('/orders',auth, adminAuth, async (req, res) => {
       phoneNumber = ''
     } = req.query;
     
-    // Build filter
     const filter = {};
     
     if (status) filter.status = status;
     if (network) filter.network = network;
     if (phoneNumber) filter.phoneNumber = { $regex: phoneNumber };
     
-    // Date range filter
     if (startDate || endDate) {
       filter.createdAt = {};
       if (startDate) filter.createdAt.$gte = new Date(startDate);
       if (endDate) {
         const endDateObj = new Date(endDate);
-        endDateObj.setDate(endDateObj.getDate() + 1); // Include end date until midnight
+        endDateObj.setDate(endDateObj.getDate() + 1);
         filter.createdAt.$lte = endDateObj;
       }
     }
@@ -465,7 +713,6 @@ router.get('/orders',auth, adminAuth, async (req, res) => {
     
     const total = await DataPurchase.countDocuments(filter);
     
-    // Calculate total revenue from filtered orders
     const revenue = await DataPurchase.aggregate([
       { $match: filter },
       { $match: { status: 'completed' } },
@@ -481,36 +728,28 @@ router.get('/orders',auth, adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   PUT /api/admin/orders/:id/status
- * @desc    Update order status
- * @access  Admin
- */
+// UPDATE ORDER STATUS
 router.put('/orders/:id/status', auth, adminAuth, async (req, res) => {
   try {
     const { status } = req.body;
     const orderId = req.params.id;
     
-    // Validate status
     if (!['pending', 'waiting', 'processing', 'failed', 'shipped', 'delivered', 'completed'].includes(status)) {
       return res.status(400).json({ msg: 'Invalid status value' });
     }
     
-    // Start a transaction for safety
     const session = await mongoose.startSession();
     session.startTransaction();
     
     try {
-      // First try to find by geonetReference (primary reference for orders)
       let order = await DataPurchase.findOne({ geonetReference: orderId })
         .populate('userId', 'name email phoneNumber walletBalance')
         .session(session);
       
-      // If not found, try by MongoDB _id
       if (!order && mongoose.Types.ObjectId.isValid(orderId)) {
         order = await DataPurchase.findById(orderId)
           .populate('userId', 'name email phoneNumber walletBalance')
@@ -525,51 +764,32 @@ router.put('/orders/:id/status', auth, adminAuth, async (req, res) => {
       
       const previousStatus = order.status;
       
-      // Log the status change for audit trail
       console.log(`Order ${orderId} status change: ${previousStatus} -> ${status} by admin ${req.user.id}`);
       
-      // Process refund if status is being changed to failed
       if (status === 'failed' && previousStatus !== 'failed') {
-        // Only process refund if the order was previously not failed
-        // Find the user and update their wallet balance
         const user = await User.findById(order.userId._id).session(session);
         
         if (user) {
-          // Add the refund amount to the user's wallet balance
           user.walletBalance += order.price;
           await user.save({ session });
           
-          // Create refund transaction record
           const transaction = new Transaction({
             userId: user._id,
             type: 'refund',
             amount: order.price,
             status: 'completed',
             reference: `REFUND-${order._id}-${Date.now()}`,
-            gateway: 'wallet-refund',
-            metadata: {
-              orderId: order._id,
-              geonetReference: order.geonetReference,
-              previousStatus,
-              adminId: req.user.id
-            }
+            gateway: 'wallet-refund'
           });
           
           await transaction.save({ session });
           
           console.log(`Refunded ${order.price} to user ${user._id} for order ${order._id}`);
           
-          // Send refund SMS to the user
           try {
-            // Format phone number for SMS if needed
-            const formatPhoneForSms = (phone) => {
-              // Remove the '+' if it exists or format as needed
-              return phone.replace(/^\+/, '');
-            };
-            
             if (user.phoneNumber) {
-              const userPhone = formatPhoneForSms(user.phoneNumber);
-              const refundMessage = `DATAMART: Your order for ${order.capacity}GB ${order.network} data bundle (Ref: ${order.geonetReference}) could not be processed. Your account has been refunded with GHS${order.price.toFixed(2)}. Thank you for choosing DATAMART.`;
+              const userPhone = user.phoneNumber.replace(/^\+/, '');
+              const refundMessage = `DATAMART: Your order for ${order.capacity}GB ${order.network} data bundle (Ref: ${order.geonetReference}) could not be processed. Your account has been refunded with GHS${order.price.toFixed(2)}.`;
               
               await sendSMS(userPhone, refundMessage, {
                 useCase: 'transactional',
@@ -578,17 +798,14 @@ router.put('/orders/:id/status', auth, adminAuth, async (req, res) => {
             }
           } catch (smsError) {
             console.error('Failed to send refund SMS:', smsError.message);
-            // Continue even if SMS fails
           }
         }
       }
       
-      // Update the order status
       order.status = status;
       order.processedBy = req.user.id;
       order.updatedAt = Date.now();
       
-      // Add status history for tracking
       if (!order.statusHistory) {
         order.statusHistory = [];
       }
@@ -602,7 +819,6 @@ router.put('/orders/:id/status', auth, adminAuth, async (req, res) => {
       
       await order.save({ session });
       
-      // Commit the transaction
       await session.commitTransaction();
       session.endSession();
       
@@ -618,7 +834,6 @@ router.put('/orders/:id/status', auth, adminAuth, async (req, res) => {
         }
       });
     } catch (txError) {
-      // If an error occurs, abort the transaction
       await session.abortTransaction();
       session.endSession();
       throw txError;
@@ -633,11 +848,7 @@ router.put('/orders/:id/status', auth, adminAuth, async (req, res) => {
   }
 });
 
-/**
- * @route   POST /api/admin/orders/bulk-status-update
- * @desc    Bulk update order statuses with improved error handling
- * @access  Admin
- */
+// BULK UPDATE ORDERS
 router.post('/orders/bulk-status-update', auth, adminAuth, async (req, res) => {
   try {
     const { orderIds, status } = req.body;
@@ -650,14 +861,12 @@ router.post('/orders/bulk-status-update', auth, adminAuth, async (req, res) => {
       return res.status(400).json({ msg: 'Invalid status value' });
     }
     
-    // Results tracking
     const results = {
       success: [],
       failed: [],
       notFound: []
     };
     
-    // Process orders in batches to avoid overwhelming the database
     const batchSize = 10;
     const batches = [];
     
@@ -666,17 +875,14 @@ router.post('/orders/bulk-status-update', auth, adminAuth, async (req, res) => {
     }
     
     for (const batch of batches) {
-      // Process each batch with a new session
       const session = await mongoose.startSession();
       session.startTransaction();
       
       try {
         for (const orderId of batch) {
-          // First try to find by geonetReference
           let order = await DataPurchase.findOne({ geonetReference: orderId })
             .session(session);
           
-          // If not found, try by MongoDB _id
           if (!order && mongoose.Types.ObjectId.isValid(orderId)) {
             order = await DataPurchase.findById(orderId)
               .session(session);
@@ -689,7 +895,6 @@ router.post('/orders/bulk-status-update', auth, adminAuth, async (req, res) => {
           
           const previousStatus = order.status;
           
-          // Skip if status is already the target status
           if (previousStatus === status) {
             results.success.push({
               id: order._id,
@@ -700,32 +905,21 @@ router.post('/orders/bulk-status-update', auth, adminAuth, async (req, res) => {
             continue;
           }
           
-          // Process refund if status is being changed to failed
           if (status === 'failed' && previousStatus !== 'failed') {
             try {
-              // Only process refund if the order was previously not failed
               const user = await User.findById(order.userId).session(session);
               
               if (user) {
-                // Add the refund amount to the user's wallet balance
                 user.walletBalance += order.price;
                 await user.save({ session });
                 
-                // Create refund transaction record
                 const transaction = new Transaction({
                   userId: user._id,
                   type: 'refund',
                   amount: order.price,
                   status: 'completed',
                   reference: `REFUND-${order._id}-${Date.now()}`,
-                  gateway: 'wallet-refund',
-                  metadata: {
-                    orderId: order._id,
-                    geonetReference: order.geonetReference,
-                    previousStatus,
-                    bulkUpdate: true,
-                    adminId: req.user.id
-                  }
+                  gateway: 'wallet-refund'
                 });
                 
                 await transaction.save({ session });
@@ -741,12 +935,10 @@ router.post('/orders/bulk-status-update', auth, adminAuth, async (req, res) => {
             }
           }
           
-          // Update the order status
           order.status = status;
           order.processedBy = req.user.id;
           order.updatedAt = Date.now();
           
-          // Add status history for tracking
           if (!order.statusHistory) {
             order.statusHistory = [];
           }
@@ -755,8 +947,7 @@ router.post('/orders/bulk-status-update', auth, adminAuth, async (req, res) => {
             status,
             changedAt: new Date(),
             changedBy: req.user.id,
-            previousStatus,
-            bulkUpdate: true
+            previousStatus
           });
           
           await order.save({ session });
@@ -769,16 +960,13 @@ router.post('/orders/bulk-status-update', auth, adminAuth, async (req, res) => {
           });
         }
         
-        // Commit the transaction for this batch
         await session.commitTransaction();
         session.endSession();
       } catch (batchError) {
-        // If an error occurs in this batch, abort its transaction
         await session.abortTransaction();
         session.endSession();
         console.error('Error processing batch:', batchError.message);
         
-        // Mark all orders in this batch as failed
         batch.forEach(orderId => {
           if (!results.success.some(s => s.id.toString() === orderId || s.geonetReference === orderId) && 
               !results.notFound.includes(orderId)) {
@@ -791,7 +979,6 @@ router.post('/orders/bulk-status-update', auth, adminAuth, async (req, res) => {
       }
     }
     
-    // Send response with detailed results
     res.json({
       msg: `Bulk update processed. Success: ${results.success.length}, Failed: ${results.failed.length}, Not Found: ${results.notFound.length}`,
       results
@@ -806,48 +993,21 @@ router.post('/orders/bulk-status-update', auth, adminAuth, async (req, res) => {
   }
 });
 
-// Schema update to track status history
-// Add this to your schema.js file to track order status changes
-/*
-const DataPurchaseSchema = new mongoose.Schema({
-  // ... existing fields
-  
-  statusHistory: [{
-    status: {
-      type: String,
-      enum: ['pending', 'waiting', 'processing', 'failed', 'shipped', 'delivered', 'completed'],
-      required: true
-    },
-    changedAt: {
-      type: Date,
-      default: Date.now
-    },
-    changedBy: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'User'
-    },
-    previousStatus: String,
-    bulkUpdate: Boolean
-  }]
-});
-*/
+// ==================== INVENTORY ROUTES ====================
 
 router.put('/inventory/:network/toggle', auth, adminAuth, async (req, res) => {
   try {
     const { network } = req.params;
     
-    // Find the inventory item
     let inventoryItem = await DataInventory.findOne({ network });
     
     if (!inventoryItem) {
-      // Create new inventory item if it doesn't exist
       inventoryItem = new DataInventory({
         network,
-        inStock: false, // Set to false since we're toggling from non-existent (assumed true)
-        skipGeonettech: false // Add default value
+        inStock: false,
+        skipGeonettech: false
       });
     } else {
-      // Toggle existing item
       inventoryItem.inStock = !inventoryItem.inStock;
       inventoryItem.updatedAt = Date.now();
     }
@@ -862,31 +1022,23 @@ router.put('/inventory/:network/toggle', auth, adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   PUT /api/admin/inventory/:network/toggle-geonettech
- * @desc    Toggle Geonettech API for specific network
- * @access  Admin
- */
 router.put('/inventory/:network/toggle-geonettech', auth, adminAuth, async (req, res) => {
   try {
     const { network } = req.params;
     
-    // Find the inventory item
     let inventoryItem = await DataInventory.findOne({ network });
     
     if (!inventoryItem) {
-      // Create new inventory item if it doesn't exist
       inventoryItem = new DataInventory({
         network,
-        inStock: true, // Default to in stock
-        skipGeonettech: true // Set to true since we're toggling from non-existent (assumed false)
+        inStock: true,
+        skipGeonettech: true
       });
     } else {
-      // Toggle existing item
       inventoryItem.skipGeonettech = !inventoryItem.skipGeonettech;
       inventoryItem.updatedAt = Date.now();
     }
@@ -901,23 +1053,16 @@ router.put('/inventory/:network/toggle-geonettech', auth, adminAuth, async (req,
     });
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   GET /api/admin/inventory
- * @desc    Get all inventory items with current status
- * @access  Admin
- */
 router.get('/inventory', auth, adminAuth, async (req, res) => {
   try {
     const inventoryItems = await DataInventory.find({}).sort({ network: 1 });
     
-    // Predefined networks
     const NETWORKS = ["YELLO", "TELECEL", "AT_PREMIUM", "airteltigo", "at"];
     
-    // Create response with all networks (create missing ones with defaults)
     const inventory = NETWORKS.map(network => {
       const existingItem = inventoryItems.find(item => item.network === network);
       
@@ -931,8 +1076,8 @@ router.get('/inventory', auth, adminAuth, async (req, res) => {
       } else {
         return {
           network,
-          inStock: true, // Default to in stock
-          skipGeonettech: false, // Default to API enabled
+          inStock: true,
+          skipGeonettech: false,
           updatedAt: null
         };
       }
@@ -944,15 +1089,10 @@ router.get('/inventory', auth, adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   GET /api/admin/inventory/:network
- * @desc    Get specific network inventory status
- * @access  Admin
- */
 router.get('/inventory/:network', auth, adminAuth, async (req, res) => {
   try {
     const { network } = req.params;
@@ -962,8 +1102,8 @@ router.get('/inventory/:network', auth, adminAuth, async (req, res) => {
     if (!inventoryItem) {
       return res.json({
         network,
-        inStock: true, // Default to in stock
-        skipGeonettech: false, // Default to API enabled
+        inStock: true,
+        skipGeonettech: false,
         updatedAt: null,
         message: 'Network not found in inventory - showing defaults'
       });
@@ -977,14 +1117,12 @@ router.get('/inventory/:network', auth, adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
-/**
- * @route   GET /api/admin/transactions
- * @desc    Get all transactions with pagination, filtering and sorting
- * @access  Admin
- */
+
+// ==================== TRANSACTION ROUTES ====================
+
 router.get('/transactions', auth, adminAuth, async (req, res) => {
   try {
     const {
@@ -996,17 +1134,15 @@ router.get('/transactions', auth, adminAuth, async (req, res) => {
       startDate = '',
       endDate = '',
       search = '',
-      phoneNumber = '' // Add phoneNumber parameter
+      phoneNumber = ''
     } = req.query;
     
-    // Build filter
     const filter = {};
     
     if (type) filter.type = type;
     if (status) filter.status = status;
     if (gateway) filter.gateway = gateway;
     
-    // Search by reference or userId
     if (search) {
       if (mongoose.Types.ObjectId.isValid(search)) {
         filter.userId = search;
@@ -1015,7 +1151,6 @@ router.get('/transactions', auth, adminAuth, async (req, res) => {
       }
     }
 
-    // Phone number search - use aggregation to find users by phone
     let userIdsByPhone = [];
     if (phoneNumber) {
       const users = await User.find({
@@ -1027,7 +1162,6 @@ router.get('/transactions', auth, adminAuth, async (req, res) => {
       if (userIdsByPhone.length > 0) {
         filter.userId = { $in: userIdsByPhone };
       } else {
-        // No users with this phone number, return empty result
         return res.json({
           transactions: [],
           totalPages: 0,
@@ -1038,13 +1172,12 @@ router.get('/transactions', auth, adminAuth, async (req, res) => {
       }
     }
     
-    // Date range filter
     if (startDate || endDate) {
       filter.createdAt = {};
       if (startDate) filter.createdAt.$gte = new Date(startDate);
       if (endDate) {
         const endDateObj = new Date(endDate);
-        endDateObj.setDate(endDateObj.getDate() + 1); // Include end date until midnight
+        endDateObj.setDate(endDateObj.getDate() + 1);
         filter.createdAt.$lte = endDateObj;
       }
     }
@@ -1057,7 +1190,6 @@ router.get('/transactions', auth, adminAuth, async (req, res) => {
     
     const total = await Transaction.countDocuments(filter);
     
-    // Calculate total transaction amount for filtered transactions
     const totalAmount = await Transaction.aggregate([
       { $match: filter },
       { $match: { status: 'completed' } },
@@ -1069,7 +1201,6 @@ router.get('/transactions', auth, adminAuth, async (req, res) => {
       }
     ]);
     
-    // Format the totals by type (deposit, payment, etc.)
     const amountByType = {};
     totalAmount.forEach(item => {
       amountByType[item._id] = item.total;
@@ -1084,14 +1215,10 @@ router.get('/transactions', auth, adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
-/**
- * @route   GET /api/admin/transactions/:id
- * @desc    Get transaction details by ID
- * @access  Admin
- */
+
 router.get('/transactions/:id', auth, adminAuth, async (req, res) => {
   try {
     const transaction = await Transaction.findById(req.params.id)
@@ -1107,20 +1234,14 @@ router.get('/transactions/:id', auth, adminAuth, async (req, res) => {
     if (err.kind === 'ObjectId') {
       return res.status(404).json({ msg: 'Transaction not found' });
     }
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   GET /api/admin/verify-paystack/:reference
- * @desc    Verify payment status from Paystack
- * @access  Admin
- */
 router.get('/verify-paystack/:reference', auth, adminAuth, async (req, res) => {
   try {
     const { reference } = req.params;
     
-    // First check if transaction exists in our database
     const transaction = await Transaction.findOne({ reference })
       .populate('userId', 'name email phoneNumber');
     
@@ -1128,7 +1249,6 @@ router.get('/verify-paystack/:reference', auth, adminAuth, async (req, res) => {
       return res.status(404).json({ msg: 'Transaction reference not found in database' });
     }
     
-    // Only verify Paystack transactions
     if (transaction.gateway !== 'paystack') {
       return res.status(400).json({ 
         msg: 'This transaction was not processed through Paystack',
@@ -1136,7 +1256,6 @@ router.get('/verify-paystack/:reference', auth, adminAuth, async (req, res) => {
       });
     }
     
-    // Verify with Paystack API
     try {
       const paystackResponse = await axios.get(
         `https://api.paystack.co/transaction/verify/${reference}`,
@@ -1150,9 +1269,7 @@ router.get('/verify-paystack/:reference', auth, adminAuth, async (req, res) => {
       
       const paystackData = paystackResponse.data;
       
-      // Update transaction status based on Paystack response
       if (paystackData.status && paystackData.data.status === 'success') {
-        // Update transaction in database if needed
         if (transaction.status !== 'completed') {
           transaction.status = 'completed';
           transaction.metadata = {
@@ -1169,7 +1286,6 @@ router.get('/verify-paystack/:reference', auth, adminAuth, async (req, res) => {
           message: 'Payment was successfully verified on Paystack'
         });
       } else {
-        // Update transaction in database if needed
         if (transaction.status !== 'failed') {
           transaction.status = 'failed';
           transaction.metadata = {
@@ -1196,15 +1312,10 @@ router.get('/verify-paystack/:reference', auth, adminAuth, async (req, res) => {
     }
   } catch (err) {
     console.error(err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   PUT /api/admin/transactions/:id/update-status
- * @desc    Manually update transaction status
- * @access  Admin
- */
 router.put('/transactions/:id/update-status', auth, adminAuth, async (req, res) => {
   try {
     const { status, adminNotes } = req.body;
@@ -1219,11 +1330,9 @@ router.put('/transactions/:id/update-status', auth, adminAuth, async (req, res) 
       return res.status(404).json({ msg: 'Transaction not found' });
     }
     
-    // Update transaction fields
     transaction.status = status;
     transaction.updatedAt = Date.now();
     
-    // Add admin notes if provided
     if (adminNotes) {
       transaction.metadata = {
         ...transaction.metadata,
@@ -1244,16 +1353,17 @@ router.put('/transactions/:id/update-status', auth, adminAuth, async (req, res) 
     if (err.kind === 'ObjectId') {
       return res.status(404).json({ msg: 'Transaction not found' });
     }
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
+
+// ==================== USER MANAGEMENT ROUTES ====================
 
 router.put('/users/:id/toggle-status', auth, adminAuth, async (req, res) => {
   try {
     const { disableReason } = req.body;
     const userId = req.params.id;
     
-    // Find the user
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ 
@@ -1262,20 +1372,15 @@ router.put('/users/:id/toggle-status', auth, adminAuth, async (req, res) => {
       });
     }
     
-    // Get current admin for tracking
     const admin = await User.findById(req.user.id).select('name');
     
-    // Toggle the isDisabled status
     user.isDisabled = !user.isDisabled;
     
-    // Update related fields
     if (user.isDisabled) {
-      // Disabling the account
       user.disableReason = disableReason || 'Administrative action';
       user.disabledAt = new Date();
       user.disabledBy = req.user.id;
     } else {
-      // Re-enabling the account
       user.disableReason = null;
       user.disabledAt = null;
       user.enabledBy = req.user.id;
@@ -1284,7 +1389,6 @@ router.put('/users/:id/toggle-status', auth, adminAuth, async (req, res) => {
     
     await user.save();
     
-    // Send notification SMS to the user
     try {
       if (user.phoneNumber) {
         const formattedPhone = user.phoneNumber.replace(/^\+/, '');
@@ -1303,7 +1407,6 @@ router.put('/users/:id/toggle-status', auth, adminAuth, async (req, res) => {
       }
     } catch (smsError) {
       console.error('Failed to send account status SMS:', smsError.message);
-      // Continue even if SMS fails
     }
     
     return res.json({
@@ -1331,16 +1434,16 @@ router.put('/users/:id/toggle-status', auth, adminAuth, async (req, res) => {
   }
 });
 
+// ==================== DASHBOARD ROUTES ====================
+
 router.get('/daily-summary', auth, adminAuth, async (req, res) => {
   try {
     const { date = new Date().toISOString().split('T')[0] } = req.query;
     
-    // Create date range for the specified date (full day)
     const startDate = new Date(date);
     const endDate = new Date(date);
     endDate.setDate(endDate.getDate() + 1);
     
-    // Query filter for the date range
     const dateFilter = {
       createdAt: {
         $gte: startDate,
@@ -1348,24 +1451,20 @@ router.get('/daily-summary', auth, adminAuth, async (req, res) => {
       }
     };
     
-    // Get total orders for the day
     const totalOrders = await DataPurchase.countDocuments(dateFilter);
     
-    // Get total revenue from completed orders
     const revenueAgg = await DataPurchase.aggregate([
       { $match: { ...dateFilter, status: 'completed' } },
       { $group: { _id: null, totalRevenue: { $sum: '$price' } } }
     ]);
     const totalRevenue = revenueAgg.length > 0 ? revenueAgg[0].totalRevenue : 0;
     
-    // Get total deposits
     const depositsAgg = await Transaction.aggregate([
       { $match: { ...dateFilter, type: 'deposit', status: 'completed' } },
       { $group: { _id: null, totalDeposits: { $sum: '$amount' } } }
     ]);
     const totalDeposits = depositsAgg.length > 0 ? depositsAgg[0].totalDeposits : 0;
     
-    // Get total data capacity sold for each network & capacity
     const capacityByNetworkAgg = await DataPurchase.aggregate([
       { $match: { ...dateFilter, status: 'completed' } },
       { 
@@ -1381,7 +1480,6 @@ router.get('/daily-summary', auth, adminAuth, async (req, res) => {
       { $sort: { '_id.network': 1, '_id.capacity': 1 } }
     ]);
     
-    // Format the capacity data for easier frontend consumption
     const capacityData = capacityByNetworkAgg.map(item => ({
       network: item._id.network,
       capacity: item._id.capacity,
@@ -1389,7 +1487,6 @@ router.get('/daily-summary', auth, adminAuth, async (req, res) => {
       totalGB: item.totalCapacity
     }));
     
-    // Get summary by network
     const networkSummaryAgg = await DataPurchase.aggregate([
       { $match: { ...dateFilter, status: 'completed' } },
       { 
@@ -1410,14 +1507,12 @@ router.get('/daily-summary', auth, adminAuth, async (req, res) => {
       revenue: item.totalRevenue
     }));
     
-    // Get total capacity for all networks
     const totalCapacityAgg = await DataPurchase.aggregate([
       { $match: { ...dateFilter, status: 'completed' } },
       { $group: { _id: null, totalGB: { $sum: '$capacity' } } }
     ]);
     const totalCapacity = totalCapacityAgg.length > 0 ? totalCapacityAgg[0].totalGB : 0;
     
-    // Get order statuses summary
     const statusSummaryAgg = await DataPurchase.aggregate([
       { $match: dateFilter },
       { $group: { _id: '$status', count: { $sum: 1 } } },
@@ -1429,7 +1524,6 @@ router.get('/daily-summary', auth, adminAuth, async (req, res) => {
       count: item.count
     }));
     
-    // Count unique customers for the day
     const uniqueCustomersAgg = await DataPurchase.aggregate([
       { $match: dateFilter },
       { $group: { _id: '$userId' } },
@@ -1437,7 +1531,6 @@ router.get('/daily-summary', auth, adminAuth, async (req, res) => {
     ]);
     const uniqueCustomers = uniqueCustomersAgg.length > 0 ? uniqueCustomersAgg[0].uniqueCustomers : 0;
     
-    // Compile the complete response
     res.json({
       date,
       summary: {
@@ -1467,18 +1560,15 @@ router.get('/user-orders/:userId', auth, adminAuth, async (req, res) => {
     const { userId } = req.params;
     const { page = 1, limit = 100 } = req.query;
     
-    // Validate userId
     if (!mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({ msg: 'Invalid user ID' });
     }
     
-    // Check if user exists
     const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ msg: 'User not found' });
     }
     
-    // Fetch orders for the user
     const orders = await DataPurchase.find({ userId })
       .limit(parseInt(limit))
       .skip((parseInt(page) - 1) * parseInt(limit))
@@ -1486,7 +1576,6 @@ router.get('/user-orders/:userId', auth, adminAuth, async (req, res) => {
     
     const total = await DataPurchase.countDocuments({ userId });
     
-    // Calculate total spent by the user
     const totalSpent = await DataPurchase.aggregate([
       { $match: { userId: mongoose.Types.ObjectId(userId), status: 'completed' } },
       { $group: { _id: null, total: { $sum: '$price' } } }
@@ -1501,37 +1590,27 @@ router.get('/user-orders/:userId', auth, adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching user orders:', err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
 
-/**
- * @route   GET /api/admin/dashboard/statistics
- * @desc    Get admin dashboard statistics
- * @access  Admin
- */
 router.get('/dashboard/statistics', auth, adminAuth, async (req, res) => {
   try {
-    // Get total users count
     const totalUsers = await User.countDocuments();
     
-    // Get total wallet balance across all users
     const walletBalance = await User.aggregate([
       { $group: { _id: null, total: { $sum: '$walletBalance' } } }
     ]);
     const totalWalletBalance = walletBalance.length > 0 ? walletBalance[0].total : 0;
     
-    // Get total completed orders
     const completedOrders = await DataPurchase.countDocuments({ status: 'completed' });
     
-    // Get total revenue from completed orders
     const revenue = await DataPurchase.aggregate([
       { $match: { status: 'completed' } },
       { $group: { _id: null, total: { $sum: '$price' } } }
     ]);
     const totalRevenue = revenue.length > 0 ? revenue[0].total : 0;
     
-    // Get total by network
     const networkStats = await DataPurchase.aggregate([
       { $match: { status: 'completed' } },
       { 
@@ -1544,7 +1623,6 @@ router.get('/dashboard/statistics', auth, adminAuth, async (req, res) => {
       { $sort: { revenue: -1 } }
     ]);
     
-    // Get recent orders
     const recentOrders = await DataPurchase.find()
       .sort({ createdAt: -1 })
       .limit(10)
@@ -1570,9 +1648,8 @@ router.get('/dashboard/statistics', auth, adminAuth, async (req, res) => {
     });
   } catch (err) {
     console.error('Error fetching dashboard statistics:', err.message);
-    res.status(500).send('Server Error');
+    res.status(500).json({ success: false, msg: 'Server Error', error: err.message });
   }
 });
-
 
 module.exports = router;

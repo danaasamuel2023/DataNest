@@ -73,7 +73,7 @@ export default function DepositPage() {
     setSuccess('');
     
     try {
-      const response = await fetch('https://datanest-lkyu.onrender.com/api/v1/deposit', {
+      const response = await fetch('http://localhost:5000/api/v1/deposit', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

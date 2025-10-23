@@ -586,7 +586,7 @@ router.post('/purchase-data', async (req, res) => {
     } else if (shouldSkipGeonet) {
       orderReferencePrefix = 'MN-'; // Manual processing prefix
     } else {
-      orderReferencePrefix = 'DM-'; // General DataMart prefix
+      orderReferencePrefix = 'NS-'; // General DataMart prefix
     }
     
     let orderReference = generateMixedReference(orderReferencePrefix);

@@ -37,7 +37,7 @@ app.use('/api/v1/data', dataOrderRoutes);
 app.use('/api/v1', Deposit);
 app.use('/api/developer', Developer)
 app.use('/api/v1', HubnetAt);
-app.use('/api',AdminManagement)
+app.use('/api/admin',AdminManagement)
 app.use('/api/v1', passreset);
 app.use('/api/reports', Report);
 app.use('/api/v1', DepositeMorle);
