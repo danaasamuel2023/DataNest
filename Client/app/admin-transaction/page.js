@@ -12,17 +12,25 @@ const AdminTransactionsPage = () => {
   const [refreshTime, setRefreshTime] = useState(new Date());
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState('all');
+  const [authToken, setAuthToken] = useState(null);
 
   const baseURL = 'https://datanest-lkyu.onrender.com';
-  const token = localStorage.getItem('authToken');
+
+  // Get auth token on mount (client-side only)
+  useEffect(() => {
+    const token = localStorage.getItem('authToken');
+    setAuthToken(token);
+  }, []);
 
   // Fetch today's transactions
   const fetchTodayTransactions = async () => {
+    if (!authToken) return;
+    
     try {
       setLoading(true);
       const response = await axios.get(`${baseURL}/api/admin/today-transactions`, {
         headers: {
-            'x-auth-token': token
+            'x-auth-token': authToken
           }
       });
       setTransactions(response.data.data.transactions);
@@ -38,10 +46,12 @@ const AdminTransactionsPage = () => {
 
   // Fetch suspicious accounts
   const fetchSuspiciousAccounts = async () => {
+    if (!authToken) return;
+    
     try {
       setLoading(true);
       const response = await axios.get(`${baseURL}/api/admin/suspicious-accounts`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${authToken}` }
       });
       setSuspiciousAccounts(response.data.data.accounts);
       setError(null);
@@ -55,6 +65,8 @@ const AdminTransactionsPage = () => {
 
   // Initial load and auto-refresh
   useEffect(() => {
+    if (!authToken) return;
+
     if (activeTab === 'transactions') {
       fetchTodayTransactions();
       const interval = setInterval(() => {
@@ -70,7 +82,7 @@ const AdminTransactionsPage = () => {
       }, 60000);
       return () => clearInterval(interval);
     }
-  }, [activeTab]);
+  }, [activeTab, authToken]);
 
   // Filter transactions
   const filteredTransactions = transactions.filter(txn => {
@@ -83,6 +95,23 @@ const AdminTransactionsPage = () => {
     
     return matchesSearch && matchesType;
   });
+
+  // Show loading state while auth token is being retrieved
+  if (!authToken) {
+    return (
+      <div className="min-h-screen bg-gray-100 flex items-center justify-center p-6">
+        <div className="text-center">
+          <div className="inline-block animate-spin">
+            <svg className="w-8 h-8 text-blue-600 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+              <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+              <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+          </div>
+          <p className="mt-2 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   // ==================== TODAY'S TRANSACTIONS TAB ====================
   const renderTransactionsTab = () => (
@@ -416,4 +445,3 @@ const AdminTransactionsPage = () => {
 };
 
 export default AdminTransactionsPage;
-
