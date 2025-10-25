@@ -88,7 +88,7 @@ const AdminUsers = () => {
       }
       
       const response = await axios.get(
-        `https://datanest-lkyu.onrender.com/api/users?page=${page}&search=${search}`,
+        `https://datanest-lkyu.onrender.com/api/admin/users?page=${page}&search=${search}`,
         {
           headers: {
             'x-auth-token': token
@@ -180,7 +180,7 @@ const AdminUsers = () => {
       const token = localStorage.getItem('authToken');
       
       const response = await axios.get(
-        `https://datanest-lkyu.onrender.com/api/transactions?userId=${userId}`,
+        `https://datanest-lkyu.onrender.com/api/admin/transactions?userId=${userId}`,
         {
           headers: {
             'x-auth-token': token
@@ -216,7 +216,7 @@ const AdminUsers = () => {
       const token = localStorage.getItem('authToken');
       
       const response = await axios.put(
-        `https://datanest-lkyu.onrender.com/api/users/${selectedUser._id}/add-money`,
+        `https://datanest-lkyu.onrender.com/api/admin/users/${selectedUser._id}/add-money`,
         { amount: parseFloat(amountToAdd) },
         {
           headers: {
