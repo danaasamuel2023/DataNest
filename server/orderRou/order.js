@@ -64,22 +64,23 @@ const mapNetworkToDatamart = (networkType) => {
 
 // ===== OFFICIAL PRICING STRUCTURES =====
 const OFFICIAL_PRICING = {
-  'YELLO': { // MTN pricing structure
+   'YELLO': { // MTN pricing structure
     '1': 4.50,
     '2': 9.20,
     '3': 13.50,
     '4': 18.50,
-    '5': 22.50,
-    '6': 26.50,
-    '8': 36.50,
-    '10': 44.50,
-    '15': 61.50,
-    '20': 82.00,
-    '25': 105.00,
-    '30': 125.00,
-    '40': 163.00,
-    '50': 204.00,
+    '5': 24.50,
+    '6': 28.00,
+    '8': 38.50,
+    '10': 46.50,
+    '15': 66.50,
+    '20': 88.00,
+    '25': 112.00,
+    '30': 137.00,
+    '40': 169.00,
+    '50': 210.00,
     '100': 420.00
+
   },
   'at': { // AirtelTigo pricing structure
     '1': 3.95,
