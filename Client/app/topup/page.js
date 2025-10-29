@@ -48,10 +48,13 @@ export default function DepositPage() {
     checkAuth();
   }, [router]);
   
+  // FIXED: Recalculate total whenever amount changes - NO USER MANIPULATION
   useEffect(() => {
     if (amount && amount > 0) {
-      const feeAmount = parseFloat(amount) * 0.03;
-      const total = parseFloat(amount) + feeAmount;
+      const depositAmount = parseFloat(amount);
+      const feeAmount = depositAmount * 0.03; // 3% fee
+      const total = depositAmount + feeAmount;
+      
       setFee(feeAmount.toFixed(2));
       setTotalAmount(total.toFixed(2));
     } else {
@@ -60,11 +63,43 @@ export default function DepositPage() {
     }
   }, [amount]);
   
+  // FIXED: Validate deposit amount
+  const validateDeposit = () => {
+    const depositAmount = parseFloat(amount);
+    
+    if (!amount || isNaN(depositAmount)) {
+      setError('Please enter a valid amount.');
+      return false;
+    }
+    
+    if (depositAmount < 5) {
+      setError('Minimum deposit amount is GHS 5.00');
+      return false;
+    }
+    
+    if (depositAmount > 100000) {
+      setError('Maximum deposit amount is GHS 100,000');
+      return false;
+    }
+    
+    // Verify calculation integrity
+    const expectedTotal = depositAmount * 1.03;
+    const userTotal = parseFloat(totalAmount);
+    const difference = Math.abs(userTotal - expectedTotal);
+    
+    if (difference > 0.01) {
+      setError('Amount calculation error. Please try again.');
+      return false;
+    }
+    
+    return true;
+  };
+  
   const handleDeposit = async (e) => {
     e.preventDefault();
     
-    if (!amount || amount <= 4) {
-      setError('Please enter a valid amount greater than 4 GHS.');
+    // Validate first
+    if (!validateDeposit()) {
       return;
     }
     
@@ -73,6 +108,10 @@ export default function DepositPage() {
     setSuccess('');
     
     try {
+      const depositAmount = parseFloat(amount);
+      const total = parseFloat(totalAmount);
+      
+      // Send both values for server-side verification
       const response = await fetch('https://datanest-lkyu.onrender.com/api/v1/deposit', {
         method: 'POST',
         headers: {
@@ -80,17 +119,35 @@ export default function DepositPage() {
         },
         body: JSON.stringify({
           userId,
-          amount: parseFloat(amount),
-          totalAmountWithFee: parseFloat(totalAmount),
-          email: userEmail
+          amount: depositAmount,
+          totalAmountWithFee: total,
+          email: userEmail,
+          ipAddress: getClientIp(),
+          userAgent: navigator.userAgent
         })
       });
 
       const data = await response.json();
       
-      if (response.ok && data.paystackUrl) {
+      // Handle errors from server validation
+      if (!response.ok) {
+        if (data.code === 'INVALID_AMOUNT_CALCULATION') {
+          setError('Payment amount mismatch detected. Transaction blocked for security.');
+        } else if (data.code === 'AMOUNT_MISMATCH') {
+          setError('Amount verification failed. Please contact support.');
+        } else {
+          setError(data.error || 'Failed to process deposit');
+        }
+        setIsLoading(false);
+        return;
+      }
+      
+      if (data.paystackUrl) {
         setSuccess('Redirecting to Paystack...');
-        window.location.href = data.paystackUrl;
+        // Redirect after short delay so user sees success message
+        setTimeout(() => {
+          window.location.href = data.paystackUrl;
+        }, 500);
       } else {
         throw new Error(data.error || 'Failed to process deposit');
       }
@@ -116,6 +173,11 @@ export default function DepositPage() {
     navigator.clipboard.writeText('0597760914');
     setCopySuccess('Copied!');
     setTimeout(() => setCopySuccess(''), 2000);
+  };
+  
+  // Helper function to get client IP (optional, for logging)
+  const getClientIp = () => {
+    return 'unknown'; // In production, you might use a service to get this
   };
   
   if (!isAuthenticated) {
@@ -181,6 +243,23 @@ export default function DepositPage() {
           </div>
 
           <div className="p-6 space-y-6">
+            {/* Security Alert Banner */}
+            <div className="p-4 rounded-xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800">
+              <div className="flex items-start space-x-3">
+                <div className="p-2 bg-emerald-100 dark:bg-emerald-900/40 rounded-lg flex-shrink-0">
+                  <Shield className="w-5 h-5 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
+                </div>
+                <div>
+                  <p className="text-sm font-semibold text-emerald-900 dark:text-emerald-300 mb-1">
+                    Enhanced Security
+                  </p>
+                  <p className="text-sm text-emerald-700 dark:text-emerald-400">
+                    All deposits are protected with server-side verification and fraud detection.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Info Banner */}
             <div className="p-4 rounded-xl bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800">
               <div className="flex items-start space-x-3">
@@ -243,16 +322,16 @@ export default function DepositPage() {
                   />
                 </div>
                 <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">
-                  Minimum deposit: GHS 5.00
+                  Minimum deposit: GHS 5.00 • Maximum: GHS 100,000
                 </p>
               </div>
               
-              {/* Amount Breakdown */}
-              {amount && amount > 0 && (
+              {/* Amount Breakdown - READ ONLY, AUTO-CALCULATED */}
+              {amount && parseFloat(amount) > 0 && (
                 <div className="p-5 bg-slate-50 dark:bg-slate-700/50 rounded-xl border border-slate-200 dark:border-slate-600">
                   <h3 className="text-sm font-bold text-slate-900 dark:text-white mb-4 flex items-center">
                     <TrendingUp className="w-5 h-5 mr-2 text-blue-600 dark:text-blue-400" strokeWidth={2} />
-                    Payment Breakdown
+                    Payment Breakdown (Auto-Calculated)
                   </h3>
                   <div className="space-y-3">
                     <div className="flex justify-between text-slate-700 dark:text-slate-300">
@@ -265,18 +344,21 @@ export default function DepositPage() {
                     </div>
                     <div className="border-t border-slate-300 dark:border-slate-600 pt-3 mt-3">
                       <div className="flex justify-between">
-                        <span className="text-lg font-bold text-slate-900 dark:text-white">Total Amount:</span>
+                        <span className="text-lg font-bold text-slate-900 dark:text-white">Total to Pay:</span>
                         <span className="text-lg font-bold text-blue-600 dark:text-blue-400">GHS {totalAmount}</span>
                       </div>
                     </div>
                   </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-3 pt-3 border-t border-slate-300 dark:border-slate-600">
+                    Note: Amount is automatically calculated. Paystack will verify this amount.
+                  </p>
                 </div>
               )}
               
               <button
                 type="button"
                 onClick={handleDeposit}
-                disabled={isLoading || !amount || amount <= 4}
+                disabled={isLoading || !amount || parseFloat(amount) < 5}
                 className="w-full flex items-center justify-center py-4 px-6 rounded-xl text-white bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-500 dark:to-blue-600 hover:from-blue-700 hover:to-blue-800 dark:hover:from-blue-600 dark:hover:to-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed transition-all font-bold text-base shadow-lg hover:shadow-xl"
               >
                 {isLoading ? (
@@ -305,7 +387,11 @@ export default function DepositPage() {
                 </p>
                 <p className="flex items-center font-medium">
                   <Shield className="w-4 h-4 mr-2 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
-                  3% processing fee applies to all deposits
+                  3% processing fee on all deposits
+                </p>
+                <p className="flex items-center font-medium">
+                  <Shield className="w-4 h-4 mr-2 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
+                  Server-side verification prevents fraud
                 </p>
                 <Link 
                   href="/myorders" 
