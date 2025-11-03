@@ -563,19 +563,37 @@ router.get('/paystack-status/:reference', async (req, res) => {
 
     console.log('✅ Purchase found in database');
 
-    // ===== 4. VERIFY AMOUNT (including 3% fee) =====
-    const expectedAmount = (dataPurchase.price || dataPurchase.basePrice * 1.03) * 100;
-    console.log('💰 Amount check - Expected:', expectedAmount, 'Received:', paymentData.amount);
+    // ===== 4. VERIFY AMOUNT =====
+    // OLD orders: price field is base price (no fee)
+    // NEW orders: price field includes 3% fee (has basePrice and processingFee fields)
     
-    if (paymentData.amount !== expectedAmount) {
+    let expectedAmount;
+    
+    if (dataPurchase.basePrice && dataPurchase.processingFee) {
+      // NEW order with fee fields - verify against total price (includes 3% fee)
+      expectedAmount = dataPurchase.price * 100;
+      console.log('💰 NEW ORDER - Verifying with 3% fee included');
+    } else {
+      // OLD order without fee fields - verify against base price (no fee)
+      expectedAmount = dataPurchase.price * 100;
+      console.log('💰 OLD ORDER - Verifying without fee');
+    }
+    
+    console.log('Amount check - Expected:', expectedAmount, 'Received:', paymentData.amount);
+    
+    // Allow small rounding difference
+    const amountDifference = Math.abs(paymentData.amount - expectedAmount);
+    if (amountDifference > 1) {
       console.error('❌ AMOUNT MISMATCH - POSSIBLE FRAUD');
       logOperation('AMOUNT_MISMATCH', {
         reference,
         paystackAmount: paymentData.amount,
         expectedAmount,
+        difference: amountDifference,
+        isNewOrder: !!(dataPurchase.basePrice && dataPurchase.processingFee),
         basePrice: dataPurchase.basePrice ? dataPurchase.basePrice.toFixed(2) : 'N/A',
         processingFee: dataPurchase.processingFee ? dataPurchase.processingFee.toFixed(2) : 'N/A',
-        totalPrice: dataPurchase.price.toFixed(2)
+        storedPrice: dataPurchase.price.toFixed(2)
       });
 
       return res.status(400).json({
@@ -583,6 +601,8 @@ router.get('/paystack-status/:reference', async (req, res) => {
         message: 'Amount mismatch - possible fraud'
       });
     }
+    
+    console.log('✅ Amount verified');
 
     console.log('✅ Amount verified');
 
