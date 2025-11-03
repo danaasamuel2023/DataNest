@@ -239,12 +239,12 @@ router.post('/paystack-initialize', async (req, res) => {
     const transactionReference = `TRX-${uuidv4()}`;
     const orderReference = generateMixedReference('PS-');
 
-    // ===== CALCULATE 3% FEE =====
+    // ===== CALCULATE 3% PROCESSING FEE =====
     const processingFee = validatedPrice * 0.03;
     const totalPrice = validatedPrice + processingFee;
 
     logOperation('PRICE_BREAKDOWN', {
-      basePrice: validatedPrice,
+      basePrice: validatedPrice.toFixed(2),
       processingFee: processingFee.toFixed(2),
       totalPrice: totalPrice.toFixed(2),
       feePercentage: '3%'
@@ -272,12 +272,12 @@ router.post('/paystack-initialize', async (req, res) => {
     logOperation('PAYSTACK_PENDING_PURCHASE_CREATED', {
       purchaseId: dataPurchase._id,
       reference: transactionReference,
-      basePrice: validatedPrice,
+      basePrice: validatedPrice.toFixed(2),
       processingFee: processingFee.toFixed(2),
       totalPrice: totalPrice.toFixed(2)
     });
 
-    // Initialize Paystack
+    // Initialize Paystack with TOTAL PRICE (including 3% fee)
     const paystackPayload = {
       email: email,
       amount: Math.round(totalPrice * 100),
@@ -290,7 +290,7 @@ router.post('/paystack-initialize', async (req, res) => {
         orderReference: orderReference,
         purchaseId: dataPurchase._id.toString(),
         userId: userId || null,
-        basePrice: validatedPrice,
+        basePrice: validatedPrice.toFixed(2),
         processingFee: processingFee.toFixed(2),
         totalPrice: totalPrice.toFixed(2)
       }
@@ -312,10 +312,10 @@ router.post('/paystack-initialize', async (req, res) => {
         paymentUrl: paystackResponse.data.data.authorization_url,
         reference: transactionReference,
         purchaseId: dataPurchase._id,
-        basePrice: validatedPrice,
+        basePrice: parseFloat(validatedPrice.toFixed(2)),
         processingFee: parseFloat(processingFee.toFixed(2)),
-        totalAmount: totalPrice,
-        amount: validatedPrice // For backwards compatibility
+        totalAmount: parseFloat(totalPrice.toFixed(2)),
+        amount: parseFloat(validatedPrice.toFixed(2))
       }
     });
 
@@ -377,7 +377,7 @@ router.post('/paystack-webhook', async (req, res) => {
       return res.status(200).json({ status: 'ok' });
     }
 
-    // Verify amount
+    // Verify amount (with 3% fee included)
     if (Math.abs(amountInNaira - dataPurchase.price) > 0.01) {
       dataPurchase.status = 'failed';
       dataPurchase.failureReason = 'Amount mismatch';
@@ -478,7 +478,10 @@ router.post('/paystack-webhook', async (req, res) => {
     logOperation('WEBHOOK_SUCCESS_COMPLETED', {
       purchaseId: dataPurchase._id,
       reference: transactionReference,
-      bundleDelivered: true
+      bundleDelivered: true,
+      totalPrice: dataPurchase.price.toFixed(2),
+      basePrice: dataPurchase.basePrice.toFixed(2),
+      processingFee: dataPurchase.processingFee.toFixed(2)
     });
 
     res.status(200).json({ status: 'ok' });
@@ -560,8 +563,8 @@ router.get('/paystack-status/:reference', async (req, res) => {
 
     console.log('✅ Purchase found in database');
 
-    // ===== 4. VERIFY AMOUNT =====
-    const expectedAmount = dataPurchase.price * 100; // Convert to kobo
+    // ===== 4. VERIFY AMOUNT (including 3% fee) =====
+    const expectedAmount = dataPurchase.price * 100;
     console.log('💰 Amount check - Expected:', expectedAmount, 'Received:', paymentData.amount);
     
     if (paymentData.amount !== expectedAmount) {
@@ -569,7 +572,10 @@ router.get('/paystack-status/:reference', async (req, res) => {
       logOperation('AMOUNT_MISMATCH', {
         reference,
         paystackAmount: paymentData.amount,
-        expectedAmount
+        expectedAmount,
+        basePrice: dataPurchase.basePrice.toFixed(2),
+        processingFee: dataPurchase.processingFee.toFixed(2),
+        totalPrice: dataPurchase.price.toFixed(2)
       });
 
       return res.status(400).json({
@@ -591,7 +597,9 @@ router.get('/paystack-status/:reference', async (req, res) => {
           network: dataPurchase.network,
           capacity: dataPurchase.capacity,
           phoneNumber: dataPurchase.phoneNumber.substring(0, 3) + 'XXXXXXX',
-          price: dataPurchase.price,
+          basePrice: parseFloat(dataPurchase.basePrice.toFixed(2)),
+          processingFee: parseFloat(dataPurchase.processingFee.toFixed(2)),
+          price: parseFloat(dataPurchase.price.toFixed(2)),
           isCompleted: true,
           completedAt: dataPurchase.completedAt,
         }
@@ -634,7 +642,8 @@ router.get('/paystack-status/:reference', async (req, res) => {
         error: sendError.message,
         phoneNumber: dataPurchase.phoneNumber,
         network: dataPurchase.network,
-        capacity: dataPurchase.capacity
+        capacity: dataPurchase.capacity,
+        totalPrice: dataPurchase.price.toFixed(2)
       });
     }
 
@@ -647,7 +656,9 @@ router.get('/paystack-status/:reference', async (req, res) => {
         network: dataPurchase.network,
         capacity: dataPurchase.capacity,
         phoneNumber: dataPurchase.phoneNumber.substring(0, 3) + 'XXXXXXX',
-        price: dataPurchase.price,
+        basePrice: parseFloat(dataPurchase.basePrice.toFixed(2)),
+        processingFee: parseFloat(dataPurchase.processingFee.toFixed(2)),
+        price: parseFloat(dataPurchase.price.toFixed(2)),
         isCompleted: dataPurchase.status === 'completed',
         completedAt: dataPurchase.completedAt,
       }

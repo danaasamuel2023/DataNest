@@ -90,6 +90,9 @@ const DataPurchaseSchema = new mongoose.Schema({
   // Add this processing field to prevent duplicate exports
 
   // ✅ ADD THESE FIELDS FOR PAYSTACK VERIFICATION
+  basePrice: { type: Number },           // Original price
+processingFee: { type: Number },       // 3% fee
+price: { type: Number, required: true }, // Total (what they pay)
   paystackReference: { type: String, unique: true, sparse: true }, // Paystack transaction ID
   paystackData: { type: mongoose.Schema.Types.Mixed }, 
   processing: { type: Boolean, default: false },
