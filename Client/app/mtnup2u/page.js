@@ -1,6 +1,6 @@
 'use client'
 import React, { useState, useEffect } from 'react';
-import { AlertTriangle, CheckCircle, X, Info, Shield, Phone, CreditCard, ArrowRight, Database, Globe } from 'lucide-react';
+import { AlertTriangle, CheckCircle, X, Info, Shield, Phone, CreditCard, ArrowRight, Database, Globe, Wallet } from 'lucide-react';
 
 const Toast = ({ message, type, onClose }) => {
   useEffect(() => {
@@ -40,7 +40,9 @@ const Toast = ({ message, type, onClose }) => {
   );
 };
 
-const PurchaseModal = ({ isOpen, onClose, bundle, phoneNumber, setPhoneNumber, onPurchase, error, isLoading }) => {
+const PurchaseModal = ({ isOpen, onClose, bundle, phoneNumber, setPhoneNumber, onPurchaseWallet, onPurchaseMomo, error, isLoading, isGuest = false }) => {
+  const [email, setEmail] = useState('');
+
   if (!isOpen || !bundle) return null;
 
   const handlePhoneNumberChange = (e) => {
@@ -57,9 +59,28 @@ const PurchaseModal = ({ isOpen, onClose, bundle, phoneNumber, setPhoneNumber, o
     setPhoneNumber(formatted);
   };
 
-  const handleSubmit = (e) => {
+  const validateForm = () => {
+    if (!phoneNumber || phoneNumber.length !== 10) {
+      return false;
+    }
+    if (isGuest && !email) {
+      return false;
+    }
+    return true;
+  };
+
+  const handleWalletClick = (e) => {
     e.preventDefault();
-    onPurchase();
+    if (validateForm()) {
+      onPurchaseWallet(isGuest ? email : null);
+    }
+  };
+
+  const handleMomoClick = (e) => {
+    e.preventDefault();
+    if (validateForm()) {
+      onPurchaseMomo(isGuest ? email : null);
+    }
   };
 
   return (
@@ -100,6 +121,24 @@ const PurchaseModal = ({ isOpen, onClose, bundle, phoneNumber, setPhoneNumber, o
             </div>
           )}
 
+          {isGuest && (
+            <div className="mb-5">
+              <label className="block text-sm font-bold mb-2 text-slate-900 dark:text-white">
+                Email Address
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="px-4 py-3 block w-full rounded-xl bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 font-semibold text-base transition-all"
+                placeholder="your@email.com"
+                required
+                autoFocus
+              />
+              <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">We'll use this for payment confirmation</p>
+            </div>
+          )}
+
           <div className="mb-5">
             <label className="block text-sm font-bold mb-2 text-slate-900 dark:text-white">
               MTN Phone Number
@@ -115,7 +154,7 @@ const PurchaseModal = ({ isOpen, onClose, bundle, phoneNumber, setPhoneNumber, o
                 className="pl-12 pr-4 py-3 block w-full rounded-xl bg-slate-50 dark:bg-slate-700 border border-slate-300 dark:border-slate-600 text-slate-900 dark:text-white placeholder-slate-400 dark:placeholder-slate-500 focus:ring-2 focus:ring-yellow-500 focus:border-yellow-500 font-semibold text-base transition-all"
                 placeholder="0XXXXXXXXX"
                 required
-                autoFocus
+                autoFocus={!isGuest}
               />
             </div>
             <p className="mt-2 text-xs font-medium text-slate-500 dark:text-slate-400">Format: 0 followed by 9 digits</p>
@@ -137,30 +176,50 @@ const PurchaseModal = ({ isOpen, onClose, bundle, phoneNumber, setPhoneNumber, o
             </div>
           </div>
 
-          <div className="flex space-x-3">
+          <div className="grid grid-cols-3 gap-3">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 py-3 px-4 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl transition-all border border-slate-200 dark:border-slate-600"
+              className="py-3 px-4 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl transition-all border border-slate-200 dark:border-slate-600 disabled:opacity-50"
               disabled={isLoading}
             >
               Cancel
             </button>
+            
+            {/* Wallet Button - Only for logged in users */}
+            {!isGuest && (
+              <button
+                type="button"
+                onClick={handleWalletClick}
+                disabled={isLoading || !validateForm()}
+                className="py-3 px-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:shadow-xl"
+              >
+                {isLoading ? (
+                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                ) : (
+                  <>
+                    <Wallet className="w-5 h-5 mr-1" strokeWidth={2} />
+                    Wallet
+                  </>
+                )}
+              </button>
+            )}
+            
+            {/* MoMo Button */}
             <button
               type="button"
-              onClick={handleSubmit}
-              disabled={isLoading || !phoneNumber || phoneNumber.length !== 10}
-              className="flex-1 py-3 px-4 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:shadow-xl"
+              onClick={handleMomoClick}
+              disabled={isLoading || !validateForm()}
+              className={`py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:shadow-xl ${
+                isGuest ? 'col-span-2' : 'col-span-1'
+              }`}
             >
               {isLoading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin mr-2"></div>
-                  Processing...
-                </>
+                <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
               ) : (
                 <>
-                  <CreditCard className="w-5 h-5 mr-2" strokeWidth={2} />
-                  Purchase Now
+                  <CreditCard className="w-5 h-5 mr-1" strokeWidth={2} />
+                  MoMo
                 </>
               )}
             </button>
@@ -267,6 +326,7 @@ const MTNBundleSelect = () => {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [pendingPurchase, setPendingPurchase] = useState(null);
+  const [guestEmail, setGuestEmail] = useState('');
   
   const [toast, setToast] = useState({
     visible: false,
@@ -293,7 +353,6 @@ const MTNBundleSelect = () => {
     { value: '50', label: '50GB', capacity: '50', price: '210.00', network: 'YELLO', inStock: inventoryAvailable },
     { value: '100', label: '100GB', capacity: '100', price: '420.00', network: 'YELLO', inStock: inventoryAvailable }
   ];
-
 
   useEffect(() => {
     const storedUserData = localStorage.getItem('userData');
@@ -355,11 +414,6 @@ const MTNBundleSelect = () => {
       return;
     }
 
-    if (!userData || !userData.id) {
-      showToast('Please login to continue', 'error');
-      return;
-    }
-
     setSelectedBundle(bundle.value);
     setPendingPurchase(bundle);
     setPhoneNumber('');
@@ -367,52 +421,140 @@ const MTNBundleSelect = () => {
     setIsPurchaseModalOpen(true);
   };
 
-  const processPurchase = async () => {
+  const handleWalletPayment = (passedGuestEmail = null) => {
+    if (passedGuestEmail) {
+      setGuestEmail(passedGuestEmail);
+    }
+    processPurchase('wallet', passedGuestEmail);
+  };
+
+  const handlePaystackPayment = (passedGuestEmail = null) => {
+    if (passedGuestEmail) {
+      setGuestEmail(passedGuestEmail);
+    }
+    processPurchase('paystack', passedGuestEmail);
+  };
+
+  const processPurchase = async (paymentMethod, passedGuestEmail = null) => {
     if (!pendingPurchase) return;
     
-    if (!validatePhoneNumber(phoneNumber)) {
-      setError('Please enter a valid MTN number (10 digits starting with 0)');
-      return;
-    }
+    const isGuest = !userData || !userData.id;
     
     setIsLoading(true);
     setError('');
 
     try {
-      const token = localStorage.getItem('authToken');
-      const response = await fetch('https://datanest-lkyu.onrender.com/api/v1/data/purchase-data', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify({
-          userId: userData.id,
-          phoneNumber: phoneNumber,
-          network: pendingPurchase.network,
-          capacity: parseInt(pendingPurchase.capacity),
-          price: parseFloat(pendingPurchase.price)
-        })
-      });
+      const API_BASE = 'https://datanest-lkyu.onrender.com/api/v1/data';
+      
+      // ===== GUEST USER - Always use Paystack =====
+      if (isGuest) {
+        const response = await fetch(`${API_BASE}/paystack-initialize`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: passedGuestEmail,
+            phoneNumber: phoneNumber,
+            network: pendingPurchase.network,
+            capacity: parseInt(pendingPurchase.capacity),
+            price: parseFloat(pendingPurchase.price),
+            userId: null
+          })
+        });
 
-      const data = await response.json();
+        const data = await response.json();
 
-      if (response.ok && data.status === 'success') {
-        showToast(`${pendingPurchase.capacity}GB purchased successfully for ${phoneNumber}!`, 'success');
-        setSelectedBundle('');
-        setPhoneNumber('');
-        setError('');
-        setIsPurchaseModalOpen(false);
-        setPendingPurchase(null);
-      } else {
-        throw new Error(data.message || 'Purchase failed');
+        if (response.ok && data.status === 'success') {
+          showToast('Redirecting to payment page...', 'success');
+          setSelectedBundle('');
+          setPhoneNumber('');
+          setIsPurchaseModalOpen(false);
+          setPendingPurchase(null);
+          setGuestEmail('');
+          window.location.href = data.data.paymentUrl;
+        } else {
+          throw new Error(data.message || 'Payment initialization failed');
+        }
+        return;
       }
+
+      // ===== LOGGED-IN USER =====
+      const token = localStorage.getItem('authToken');
+
+      // If user selected WALLET
+      if (paymentMethod === 'wallet') {
+        const purchaseResponse = await fetch(`${API_BASE}/purchase-data`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            userId: userData.id,
+            phoneNumber: phoneNumber,
+            network: pendingPurchase.network,
+            capacity: parseInt(pendingPurchase.capacity),
+            price: parseFloat(pendingPurchase.price)
+          })
+        });
+
+        const purchaseData = await purchaseResponse.json();
+
+        if (purchaseResponse.ok && purchaseData.status === 'success') {
+          showToast(`✅ ${pendingPurchase.capacity}GB purchased successfully!`, 'success');
+          setSelectedBundle('');
+          setPhoneNumber('');
+          setError('');
+          setIsPurchaseModalOpen(false);
+          setPendingPurchase(null);
+          setIsLoading(false);
+        } else if (purchaseResponse.status === 400 && purchaseData.message.includes('balance')) {
+          setError('Insufficient wallet balance! Use MoMo instead.');
+          showToast('Insufficient balance - try MoMo payment', 'error');
+          setIsLoading(false);
+        } else {
+          throw new Error(purchaseData.message || 'Wallet payment failed');
+        }
+        return;
+      }
+
+      // If user selected PAYSTACK/MOMO
+      if (paymentMethod === 'paystack') {
+        const paystackResponse = await fetch(`${API_BASE}/paystack-initialize`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            email: userData.email,
+            phoneNumber: phoneNumber,
+            network: pendingPurchase.network,
+            capacity: parseInt(pendingPurchase.capacity),
+            price: parseFloat(pendingPurchase.price),
+            userId: userData.id
+          })
+        });
+
+        const paystackData = await paystackResponse.json();
+
+        if (paystackResponse.ok && paystackData.status === 'success') {
+          showToast('Redirecting to payment page...', 'success');
+          setSelectedBundle('');
+          setPhoneNumber('');
+          setIsPurchaseModalOpen(false);
+          setPendingPurchase(null);
+          window.location.href = paystackData.data.paymentUrl;
+        } else {
+          throw new Error(paystackData.message || 'Payment initialization failed');
+        }
+      }
+
     } catch (error) {
       console.error('Purchase error:', error);
       const errorMessage = error.message || 'Purchase failed. Please try again.';
       setError(errorMessage);
       showToast(errorMessage, 'error');
-    } finally {
       setIsLoading(false);
     }
   };
@@ -445,13 +587,16 @@ const MTNBundleSelect = () => {
             setPendingPurchase(null);
             setPhoneNumber('');
             setError('');
+            setGuestEmail('');
           }}
           bundle={pendingPurchase}
           phoneNumber={phoneNumber}
           setPhoneNumber={setPhoneNumber}
-          onPurchase={processPurchase}
+          onPurchaseWallet={handleWalletPayment}
+          onPurchaseMomo={handlePaystackPayment}
           error={error}
           isLoading={isLoading}
+          isGuest={!userData || !userData.id}
         />
         
         <div className="text-center mb-8">
@@ -464,6 +609,9 @@ const MTNBundleSelect = () => {
             </h1>
           </div>
           <p className="text-slate-600 dark:text-slate-400 text-lg font-semibold">Non-Expiry Data Packages</p>
+          {userData && userData.id && (
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Welcome back! Pay with wallet or MoMo</p>
+          )}
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
