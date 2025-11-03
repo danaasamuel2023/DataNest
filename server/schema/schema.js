@@ -86,7 +86,7 @@ const DataPurchaseSchema = new mongoose.Schema({
   method: { type: String, enum: ["web", "api"], required: true }, 
   price: { type: Number, required: true }, 
   geonetReference: { type: String, required: true }, 
-  status: { type: String, enum: ["pending", "completed", "failed","processing","refunded","refund","delivered","on","waiting","accepted"], default: "pending" }, 
+  status: { type: String, enum: ["pending", "completed", "failed","processing","refunded","refund","delivered","on","waiting","accepted","pending_retry"], default: "pending" }, 
   // Add this processing field to prevent duplicate exports
 
   // ✅ ADD THESE FIELDS FOR PAYSTACK VERIFICATION

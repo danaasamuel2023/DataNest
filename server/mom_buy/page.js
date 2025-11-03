@@ -171,6 +171,38 @@ const generateMixedReference = (prefix = '') => {
   return reference;
 };
 
+// ===== SEND DATA BUNDLE FUNCTION =====
+const sendDataBundle = async (phoneNumber, network, capacity) => {
+  try {
+    console.log('📤 Sending data bundle:', { phoneNumber, network, capacity });
+
+    const datamartNetwork = mapNetworkToDatamart(network);
+    const datamartPayload = {
+      phoneNumber: phoneNumber,
+      network: datamartNetwork,
+      capacity: capacity.toString(),
+      gateway: 'paystack',
+      ref: `VERIFY-${uuidv4()}`
+    };
+
+    const response = await datamartClient.post(
+      '/api/developer/purchase',
+      datamartPayload
+    );
+
+    console.log('✅ DataMart API response:', response.data);
+
+    if (response.data?.status !== 'success') {
+      throw new Error(response.data?.message || 'Failed to send data');
+    }
+
+    return response.data;
+  } catch (error) {
+    console.error('❌ Data sending error:', error.message);
+    throw new Error(`Data sending failed: ${error.message}`);
+  }
+};
+
 // ========== PAYSTACK INITIALIZE ==========
 router.post('/paystack-initialize', async (req, res) => {
   try {
@@ -219,8 +251,7 @@ router.post('/paystack-initialize', async (req, res) => {
       price: validatedPrice,
       status: 'pending',
       geonetReference: orderReference,
-      paystackReference: transactionReference,
-      paystackStatus: 'pending'
+      paystackReference: transactionReference
     });
 
     await dataPurchase.save();
@@ -293,6 +324,8 @@ router.post('/paystack-webhook', async (req, res) => {
 
     if (hash !== signature) {
       logOperation('WEBHOOK_INVALID_SIGNATURE', { received: signature });
+      await session.abortTransaction();
+      session.endSession();
       return res.status(401).json({ error: 'Invalid signature' });
     }
 
@@ -302,6 +335,8 @@ router.post('/paystack-webhook', async (req, res) => {
     logOperation('WEBHOOK_RECEIVED', { event, reference: data?.reference });
 
     if (event !== 'charge.success') {
+      await session.abortTransaction();
+      session.endSession();
       return res.status(200).json({ status: 'ok' });
     }
 
@@ -323,10 +358,9 @@ router.post('/paystack-webhook', async (req, res) => {
     // Verify amount
     if (Math.abs(amountInNaira - dataPurchase.price) > 0.01) {
       dataPurchase.status = 'failed';
-      dataPurchase.paystackStatus = 'failed';
       dataPurchase.failureReason = 'Amount mismatch';
       await dataPurchase.save({ session });
-      await session.abortTransaction();
+      await session.commitTransaction();
       session.endSession();
       return res.status(200).json({ status: 'ok' });
     }
@@ -338,10 +372,9 @@ router.post('/paystack-webhook', async (req, res) => {
 
     if (inventory && !inventory.inStock) {
       dataPurchase.status = 'failed';
-      dataPurchase.paystackStatus = 'failed';
       dataPurchase.failureReason = 'Out of stock';
       await dataPurchase.save({ session });
-      await session.abortTransaction();
+      await session.commitTransaction();
       session.endSession();
       return res.status(200).json({ status: 'ok' });
     }
@@ -377,11 +410,10 @@ router.post('/paystack-webhook', async (req, res) => {
     } catch (processError) {
       logOperation('WEBHOOK_PROCESSING_ERROR', { error: processError.message });
 
-      dataPurchase.status = 'failed';
-      dataPurchase.paystackStatus = 'verified_but_bundle_failed';
+      dataPurchase.status = 'pending_retry';
       dataPurchase.failureReason = `Bundle processing failed: ${processError.message}`;
       await dataPurchase.save({ session });
-      await session.abortTransaction();
+      await session.commitTransaction();
       session.endSession();
       return res.status(200).json({ status: 'ok' });
     }
@@ -394,9 +426,7 @@ router.post('/paystack-webhook', async (req, res) => {
       status: 'completed',
       reference: transactionReference,
       gateway: 'paystack',
-      description: `Data: ${dataPurchase.capacity}GB ${dataPurchase.network}`,
-      paystackReference: transactionReference,
-      paystackCustomerId: data.customer?.id
+      description: `Data: ${dataPurchase.capacity}GB ${dataPurchase.network}`
     });
 
     // Update purchase
@@ -404,8 +434,7 @@ router.post('/paystack-webhook', async (req, res) => {
     dataPurchase.apiOrderId = apiOrderId;
     dataPurchase.apiResponse = orderResponse;
     dataPurchase.processingMethod = 'datamart_api';
-    dataPurchase.paystackStatus = 'verified';
-    dataPurchase.paystackAmount = amountInNaira;
+    dataPurchase.paystackData = data;
     dataPurchase.paystackCustomerId = data.customer?.id;
     dataPurchase.completedAt = new Date();
 
@@ -445,12 +474,13 @@ router.post('/paystack-webhook', async (req, res) => {
   }
 });
 
+// ========== CHECK PAYMENT STATUS ==========
 router.get('/paystack-status/:reference', async (req, res) => {
   try {
     const { reference } = req.params;
     console.log('🔍 Verifying payment:', reference);
 
-    // Check if PAYSTACK_SECRET_KEY exists
+    // Validate secret key
     if (!PAYSTACK_SECRET) {
       console.error('❌ PAYSTACK_SECRET_KEY not set in environment');
       return res.status(500).json({
@@ -470,9 +500,9 @@ router.get('/paystack-status/:reference', async (req, res) => {
           },
         }
       );
-      console.log('✅ Paystack verified');
+      console.log('✅ Paystack API verified');
     } catch (paystackError) {
-      console.error('❌ Paystack error:', paystackError.message);
+      console.error('❌ Paystack API error:', paystackError.message);
       return res.status(400).json({
         status: 'failed',
         message: 'Payment verification failed with Paystack'
@@ -481,15 +511,19 @@ router.get('/paystack-status/:reference', async (req, res) => {
 
     const { status: paymentSuccessful, data: paymentData } = paystackResponse.data;
 
+    // ===== 2. CHECK IF PAYSTACK SAYS IT'S SUCCESSFUL =====
     if (!paymentSuccessful || paymentData.status !== 'success') {
-      console.log('❌ Payment not successful:', paymentData.status);
+      console.log('❌ Payment not successful on Paystack:', paymentData.status);
       return res.status(400).json({
         status: 'failed',
-        message: 'Payment not successful'
+        message: 'Payment not successful',
+        paystackStatus: paymentData.status
       });
     }
 
-    // ===== 2. FIND IN DATABASE =====
+    console.log('✅ Payment successful on Paystack');
+
+    // ===== 3. FIND IN DATABASE =====
     let dataPurchase = await DataPurchase.findOne({
       paystackReference: reference
     });
@@ -502,38 +536,87 @@ router.get('/paystack-status/:reference', async (req, res) => {
       });
     }
 
-    // ===== 3. VERIFY AMOUNT =====
+    console.log('✅ Purchase found in database');
+
+    // ===== 4. VERIFY AMOUNT =====
     const expectedAmount = dataPurchase.price * 100; // Convert to kobo
+    console.log('💰 Amount check - Expected:', expectedAmount, 'Received:', paymentData.amount);
+    
     if (paymentData.amount !== expectedAmount) {
-      console.error('❌ AMOUNT MISMATCH');
+      console.error('❌ AMOUNT MISMATCH - POSSIBLE FRAUD');
+      logOperation('AMOUNT_MISMATCH', {
+        reference,
+        paystackAmount: paymentData.amount,
+        expectedAmount
+      });
+
       return res.status(400).json({
         status: 'failed',
-        message: 'Amount mismatch'
+        message: 'Amount mismatch - possible fraud'
       });
     }
 
-    // ===== 4. UPDATE IF NOT COMPLETED =====
-    if (dataPurchase.status !== 'completed') {
+    console.log('✅ Amount verified');
+
+    // ===== 5. CHECK IF ALREADY COMPLETED =====
+    if (dataPurchase.status === 'completed') {
+      console.log('✅ Already completed, returning existing data');
+      return res.json({
+        status: 'success',
+        data: {
+          purchaseId: dataPurchase._id,
+          status: 'completed',
+          network: dataPurchase.network,
+          capacity: dataPurchase.capacity,
+          phoneNumber: dataPurchase.phoneNumber.substring(0, 3) + 'XXXXXXX',
+          price: dataPurchase.price,
+          isCompleted: true,
+          completedAt: dataPurchase.completedAt,
+        }
+      });
+    }
+
+    // ===== 6. MARK AS COMPLETED & SEND DATA =====
+    console.log('💾 Marking as completed and sending data...');
+    
+    try {
+      // Try to send data bundle via DataMart API
+      const bundleResponse = await sendDataBundle(
+        dataPurchase.phoneNumber,
+        dataPurchase.network,
+        dataPurchase.capacity
+      );
+
       dataPurchase.status = 'completed';
+      dataPurchase.paystackData = paymentData;
+      dataPurchase.apiResponse = bundleResponse;
+      dataPurchase.completedAt = new Date();
+      await dataPurchase.save();
+
+      console.log('✅ Data bundle sent successfully');
+
+    } catch (sendError) {
+      console.error('⚠️ Data sending error:', sendError.message);
+      
+      // Mark for retry but still mark payment as completed
+      dataPurchase.status = 'pending_retry';
+      dataPurchase.failureReason = sendError.message;
       dataPurchase.paystackData = paymentData;
       dataPurchase.completedAt = new Date();
       await dataPurchase.save();
 
-      // Send data bundle
-      try {
-        await sendDataBundle(
-          dataPurchase.phoneNumber,
-          dataPurchase.network,
-          dataPurchase.capacity
-        );
-      } catch (err) {
-        console.error('Data sending error:', err);
-        dataPurchase.status = 'pending_retry';
-        await dataPurchase.save();
-      }
+      // Log for manual intervention
+      logOperation('DATA_BUNDLE_SEND_FAILED', {
+        reference,
+        purchaseId: dataPurchase._id,
+        error: sendError.message,
+        phoneNumber: dataPurchase.phoneNumber,
+        network: dataPurchase.network,
+        capacity: dataPurchase.capacity
+      });
     }
 
-    // ===== 5. RETURN SUCCESS =====
+    // ===== 7. RETURN SUCCESS =====
     res.json({
       status: 'success',
       data: {
@@ -544,12 +627,19 @@ router.get('/paystack-status/:reference', async (req, res) => {
         phoneNumber: dataPurchase.phoneNumber.substring(0, 3) + 'XXXXXXX',
         price: dataPurchase.price,
         isCompleted: dataPurchase.status === 'completed',
-        completedAt: dataPurchase.completedAt
+        completedAt: dataPurchase.completedAt,
       }
     });
 
   } catch (error) {
     console.error('💥 ERROR:', error.message);
+    console.error('Stack:', error.stack);
+    
+    logOperation('PAYSTACK_STATUS_ERROR', {
+      reference: req.params.reference,
+      message: error.message
+    });
+
     res.status(500).json({
       status: 'error',
       message: 'Server error',
