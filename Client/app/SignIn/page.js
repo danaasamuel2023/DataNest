@@ -14,7 +14,8 @@ import {
   Shield,
   Moon,
   Sun,
-  Database
+  Database,
+  ShoppingCart
 } from 'lucide-react';
 
 const Toast = ({ message, type, onClose }) => {
@@ -158,6 +159,10 @@ export default function LoginPage() {
     }
   };
 
+  const handleBuyNow = () => {
+    window.location.href = '/mtnup2u';
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 flex flex-col justify-center py-12 sm:px-6 lg:px-8 transition-colors">
       <button
@@ -196,6 +201,27 @@ export default function LoginPage() {
       </div>
 
       <div className="mt-8 sm:mx-auto sm:w-full sm:max-w-md">
+        {/* ===== QUICK BUY SECTION ===== */}
+        <div className="mb-6 bg-gradient-to-r from-emerald-50 to-emerald-50 dark:from-emerald-900/20 dark:to-emerald-900/30 rounded-xl border-2 border-emerald-200 dark:border-emerald-700/50 p-5 shadow-md">
+          <div className="flex items-center space-x-3 mb-4">
+            <div className="p-2 bg-emerald-100 dark:bg-emerald-900/40 rounded-lg">
+              <ShoppingCart className="w-5 h-5 text-emerald-600 dark:text-emerald-400" strokeWidth={2} />
+            </div>
+            <div>
+              <p className="font-bold text-emerald-900 dark:text-emerald-100 text-sm">Want to buy now?</p>
+              <p className="text-xs text-emerald-700 dark:text-emerald-300">Skip login and purchase directly</p>
+            </div>
+          </div>
+          <button
+            onClick={handleBuyNow}
+            className="w-full py-2.5 px-4 bg-gradient-to-r from-emerald-500 to-emerald-600 dark:from-emerald-600 dark:to-emerald-700 hover:from-emerald-600 hover:to-emerald-700 dark:hover:from-emerald-700 dark:hover:to-emerald-800 text-white font-bold rounded-lg transition-all shadow-md hover:shadow-lg text-sm flex items-center justify-center space-x-2"
+          >
+            <ShoppingCart className="w-4 h-4" strokeWidth={2} />
+            <span>Buy Data Bundle</span>
+            <ArrowRight className="w-4 h-4" strokeWidth={2} />
+          </button>
+        </div>
+
         <div className="bg-white dark:bg-slate-800 py-8 px-4 shadow-xl border border-slate-200 dark:border-slate-700 rounded-xl sm:px-10">
           <div className="space-y-6">
             {error && (
