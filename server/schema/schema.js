@@ -88,6 +88,10 @@ const DataPurchaseSchema = new mongoose.Schema({
   geonetReference: { type: String, required: true }, 
   status: { type: String, enum: ["pending", "completed", "failed","processing","refunded","refund","delivered","on","waiting","accepted"], default: "pending" }, 
   // Add this processing field to prevent duplicate exports
+
+  // ✅ ADD THESE FIELDS FOR PAYSTACK VERIFICATION
+  paystackReference: { type: String, unique: true, sparse: true }, // Paystack transaction ID
+  paystackData: { type: mongoose.Schema.Types.Mixed }, 
   processing: { type: Boolean, default: false },
   // Add these fields for admin notes and update tracking
   adminNotes: { type: String },
