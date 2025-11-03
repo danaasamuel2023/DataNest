@@ -564,7 +564,7 @@ router.get('/paystack-status/:reference', async (req, res) => {
     console.log('✅ Purchase found in database');
 
     // ===== 4. VERIFY AMOUNT (including 3% fee) =====
-    const expectedAmount = dataPurchase.price * 100;
+    const expectedAmount = (dataPurchase.price || dataPurchase.basePrice * 1.03) * 100;
     console.log('💰 Amount check - Expected:', expectedAmount, 'Received:', paymentData.amount);
     
     if (paymentData.amount !== expectedAmount) {
@@ -573,8 +573,8 @@ router.get('/paystack-status/:reference', async (req, res) => {
         reference,
         paystackAmount: paymentData.amount,
         expectedAmount,
-        basePrice: dataPurchase.basePrice.toFixed(2),
-        processingFee: dataPurchase.processingFee.toFixed(2),
+        basePrice: dataPurchase.basePrice ? dataPurchase.basePrice.toFixed(2) : 'N/A',
+        processingFee: dataPurchase.processingFee ? dataPurchase.processingFee.toFixed(2) : 'N/A',
         totalPrice: dataPurchase.price.toFixed(2)
       });
 
@@ -597,8 +597,8 @@ router.get('/paystack-status/:reference', async (req, res) => {
           network: dataPurchase.network,
           capacity: dataPurchase.capacity,
           phoneNumber: dataPurchase.phoneNumber.substring(0, 3) + 'XXXXXXX',
-          basePrice: parseFloat(dataPurchase.basePrice.toFixed(2)),
-          processingFee: parseFloat(dataPurchase.processingFee.toFixed(2)),
+          basePrice: dataPurchase.basePrice ? parseFloat(dataPurchase.basePrice.toFixed(2)) : null,
+          processingFee: dataPurchase.processingFee ? parseFloat(dataPurchase.processingFee.toFixed(2)) : null,
           price: parseFloat(dataPurchase.price.toFixed(2)),
           isCompleted: true,
           completedAt: dataPurchase.completedAt,
@@ -656,8 +656,8 @@ router.get('/paystack-status/:reference', async (req, res) => {
         network: dataPurchase.network,
         capacity: dataPurchase.capacity,
         phoneNumber: dataPurchase.phoneNumber.substring(0, 3) + 'XXXXXXX',
-        basePrice: parseFloat(dataPurchase.basePrice.toFixed(2)),
-        processingFee: parseFloat(dataPurchase.processingFee.toFixed(2)),
+        basePrice: dataPurchase.basePrice ? parseFloat(dataPurchase.basePrice.toFixed(2)) : null,
+        processingFee: dataPurchase.processingFee ? parseFloat(dataPurchase.processingFee.toFixed(2)) : null,
         price: parseFloat(dataPurchase.price.toFixed(2)),
         isCompleted: dataPurchase.status === 'completed',
         completedAt: dataPurchase.completedAt,
