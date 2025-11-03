@@ -451,7 +451,7 @@ router.get('/paystack-status/:reference', async (req, res) => {
     console.log('🔍 Verifying payment:', reference);
 
     // Check if PAYSTACK_SECRET_KEY exists
-    if (!process.env.PAYSTACK_SECRET_KEY) {
+    if (!PAYSTACK_SECRET) {
       console.error('❌ PAYSTACK_SECRET_KEY not set in environment');
       return res.status(500).json({
         status: 'error',
