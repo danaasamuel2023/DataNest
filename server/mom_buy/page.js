@@ -239,6 +239,17 @@ router.post('/paystack-initialize', async (req, res) => {
     const transactionReference = `TRX-${uuidv4()}`;
     const orderReference = generateMixedReference('PS-');
 
+    // ===== CALCULATE 3% FEE =====
+    const processingFee = validatedPrice * 0.03;
+    const totalPrice = validatedPrice + processingFee;
+
+    logOperation('PRICE_BREAKDOWN', {
+      basePrice: validatedPrice,
+      processingFee: processingFee.toFixed(2),
+      totalPrice: totalPrice.toFixed(2),
+      feePercentage: '3%'
+    });
+
     // Create pending purchase
     const dataPurchase = new DataPurchase({
       email: email,
@@ -248,7 +259,9 @@ router.post('/paystack-initialize', async (req, res) => {
       capacity: capacity,
       gateway: 'paystack',
       method: 'web',
-      price: validatedPrice,
+      price: totalPrice,
+      basePrice: validatedPrice,
+      processingFee: processingFee,
       status: 'pending',
       geonetReference: orderReference,
       paystackReference: transactionReference
@@ -258,13 +271,16 @@ router.post('/paystack-initialize', async (req, res) => {
 
     logOperation('PAYSTACK_PENDING_PURCHASE_CREATED', {
       purchaseId: dataPurchase._id,
-      reference: transactionReference
+      reference: transactionReference,
+      basePrice: validatedPrice,
+      processingFee: processingFee.toFixed(2),
+      totalPrice: totalPrice.toFixed(2)
     });
 
     // Initialize Paystack
     const paystackPayload = {
       email: email,
-      amount: Math.round(validatedPrice * 100),
+      amount: Math.round(totalPrice * 100),
       reference: transactionReference,
       callback_url: process.env.PAYSTACK_CALLBACK_URL || 'https://www.datanestgh.com/payment-status',
       metadata: {
@@ -273,7 +289,10 @@ router.post('/paystack-initialize', async (req, res) => {
         capacity: capacity,
         orderReference: orderReference,
         purchaseId: dataPurchase._id.toString(),
-        userId: userId || null
+        userId: userId || null,
+        basePrice: validatedPrice,
+        processingFee: processingFee.toFixed(2),
+        totalPrice: totalPrice.toFixed(2)
       }
     };
 
@@ -293,7 +312,10 @@ router.post('/paystack-initialize', async (req, res) => {
         paymentUrl: paystackResponse.data.data.authorization_url,
         reference: transactionReference,
         purchaseId: dataPurchase._id,
-        amount: validatedPrice
+        basePrice: validatedPrice,
+        processingFee: parseFloat(processingFee.toFixed(2)),
+        totalAmount: totalPrice,
+        amount: validatedPrice // For backwards compatibility
       }
     });
 
