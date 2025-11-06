@@ -262,7 +262,7 @@ router.post('/paystack-initialize', async (req, res) => {
       price: totalPrice,
       basePrice: validatedPrice,
       processingFee: processingFee,
-      status: 'pending',
+      status: 'waiting',
       geonetReference: orderReference,
       paystackReference: transactionReference
     });
