@@ -1,6 +1,11 @@
-'use client'
+'use client';
 import React, { useState, useEffect } from 'react';
 import { AlertTriangle, CheckCircle, X, Info, Shield, Phone, CreditCard, ArrowRight, Database, Globe, Wallet } from 'lucide-react';
+
+// ========== CONFIG - SINGLE API BASE URL ==========
+const API_BASE = 'https://datanest-lkyu.onrender.com/api/v1/data';
+// OR for local development:
+// const API_BASE = 'http://localhost:5000/api/v1/data';
 
 const Toast = ({ message, type, onClose }) => {
   useEffect(() => {
@@ -186,7 +191,6 @@ const PurchaseModal = ({ isOpen, onClose, bundle, phoneNumber, setPhoneNumber, o
               Cancel
             </button>
             
-            {/* Wallet Button - Only for logged in users */}
             {!isGuest && (
               <button
                 type="button"
@@ -205,7 +209,6 @@ const PurchaseModal = ({ isOpen, onClose, bundle, phoneNumber, setPhoneNumber, o
               </button>
             )}
             
-            {/* MoMo Button */}
             <button
               type="button"
               onClick={handleMomoClick}
@@ -230,100 +233,12 @@ const PurchaseModal = ({ isOpen, onClose, bundle, phoneNumber, setPhoneNumber, o
   );
 };
 
-const ServiceInfoModal = ({ isOpen, onClose, onConfirm }) => {
-  if (!isOpen) return null;
-  
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 w-full max-w-md shadow-2xl">
-        <div className="bg-gradient-to-r from-amber-500 to-orange-500 px-6 py-5 rounded-t-xl flex justify-between items-center">
-          <h3 className="text-xl font-bold text-white flex items-center">
-            <AlertTriangle className="w-6 h-6 mr-3" strokeWidth={2} />
-            Service Notice
-          </h3>
-          <button onClick={onClose} className="text-white hover:text-white/70 p-2 rounded-lg hover:bg-white/10 transition-all">
-            <X className="w-5 h-5" strokeWidth={2} />
-          </button>
-        </div>
-        
-        <div className="px-6 py-6 max-h-[60vh] overflow-y-auto">
-          <div className="space-y-4 text-slate-700 dark:text-slate-300">
-            <div className="flex items-start">
-              <div className="w-2 h-2 rounded-full bg-yellow-500 mr-3 mt-2 flex-shrink-0"></div>
-              <p className="font-medium"><strong className="text-slate-900 dark:text-white">Not instant service</strong> - delivery times vary</p>
-            </div>
-            <div className="flex items-start">
-              <div className="w-2 h-2 rounded-full bg-yellow-500 mr-3 mt-2 flex-shrink-0"></div>
-              <p className="font-medium">For urgent data, use <strong className="text-slate-900 dark:text-white">*138#</strong> instead</p>
-            </div>
-            <div className="flex items-start">
-              <div className="w-2 h-2 rounded-full bg-yellow-500 mr-3 mt-2 flex-shrink-0"></div>
-              <p className="font-medium">Please be patient - orders may take time to process</p>
-            </div>
-            <div className="flex items-start">
-              <div className="w-2 h-2 rounded-full bg-yellow-500 mr-3 mt-2 flex-shrink-0"></div>
-              <p className="font-medium">Not suitable for instant bundle needs</p>
-            </div>
-          </div>
-          
-          <div className="bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800 p-4 rounded-xl mt-5">
-            <div className="flex items-start">
-              <Info className="w-5 h-5 text-emerald-600 dark:text-emerald-400 mr-3 mt-0.5 flex-shrink-0" strokeWidth={2} />
-              <p className="text-emerald-800 dark:text-emerald-300 text-sm font-medium">
-                Thank you for your patience and understanding.
-              </p>
-            </div>
-          </div>
-        </div>
-        
-        <div className="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex space-x-3">
-          <button
-            onClick={onClose}
-            className="flex-1 py-3 px-4 bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-900 dark:text-white font-semibold rounded-xl transition-all border border-slate-200 dark:border-slate-600"
-          >
-            Cancel
-          </button>
-          <button
-            onClick={onConfirm}
-            className="flex-1 py-3 px-4 bg-gradient-to-r from-yellow-500 to-amber-500 hover:from-yellow-600 hover:to-amber-600 text-white font-bold rounded-xl transition-all shadow-lg hover:shadow-xl"
-          >
-            Continue
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
-const LoadingOverlay = ({ isLoading }) => {
-  if (!isLoading) return null;
-  
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm">
-      <div className="bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 p-8 max-w-xs w-full mx-auto text-center shadow-2xl">
-        <div className="flex justify-center mb-5">
-          <div className="relative w-16 h-16">
-            <div className="w-16 h-16 rounded-full border-3 border-slate-200 dark:border-slate-700"></div>
-            <div className="absolute top-0 w-16 h-16 rounded-full border-3 border-transparent border-t-yellow-500 animate-spin"></div>
-            <div className="absolute inset-3 rounded-xl bg-gradient-to-br from-yellow-500 to-amber-500 flex items-center justify-center shadow-lg">
-              <Globe className="w-6 h-6 text-white" strokeWidth={2.5} />
-            </div>
-          </div>
-        </div>
-        <h4 className="text-xl font-bold text-slate-900 dark:text-white mb-2">Processing Order</h4>
-        <p className="text-slate-600 dark:text-slate-400 text-sm font-medium">Please wait while we process your purchase</p>
-      </div>
-    </div>
-  );
-};
-
 const MTNBundleSelect = () => {
   const [selectedBundle, setSelectedBundle] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [userData, setUserData] = useState(null);
-  const [isModalOpen, setIsModalOpen] = useState(false);
   const [isPurchaseModalOpen, setIsPurchaseModalOpen] = useState(false);
   const [pendingPurchase, setPendingPurchase] = useState(null);
   const [guestEmail, setGuestEmail] = useState('');
@@ -361,38 +276,6 @@ const MTNBundleSelect = () => {
     }
   }, []);
 
-  useEffect(() => {
-    const style = document.createElement('style');
-    style.textContent = `
-      @keyframes slideIn {
-        from {
-          opacity: 0;
-          transform: translateX(100px);
-        }
-        to {
-          opacity: 1;
-          transform: translateX(0);
-        }
-      }
-      .animate-slide-in {
-        animation: slideIn 0.3s ease-out;
-      }
-    `;
-    document.head.appendChild(style);
-    
-    return () => {
-      document.head.removeChild(style);
-    };
-  }, []);
-
-  const validatePhoneNumber = (number) => {
-    const cleanNumber = number.replace(/[\s-]/g, '');
-    if (cleanNumber.startsWith('0')) {
-      return cleanNumber.length === 10 && /^0\d{9}$/.test(cleanNumber);
-    }
-    return false;
-  };
-
   const showToast = (message, type = 'success') => {
     setToast({
       visible: true,
@@ -421,6 +304,77 @@ const MTNBundleSelect = () => {
     setIsPurchaseModalOpen(true);
   };
 
+  const processPurchase = async (paymentMethod, passedGuestEmail = null) => {
+    if (!pendingPurchase) return;
+    
+    const isGuest = !userData || !userData.id;
+    
+    setIsLoading(true);
+    setError('');
+
+    try {
+      // ========== ALL REQUESTS USE SAME API_BASE ==========
+      const url = `${API_BASE}/paystack-initialize`;
+
+      console.log('📤 Sending request to:', url);
+      console.log('📋 Payload:', {
+        email: passedGuestEmail || userData?.email,
+        phoneNumber: phoneNumber,
+        network: pendingPurchase.network,
+        capacity: parseInt(pendingPurchase.capacity),
+        price: parseFloat(pendingPurchase.price),
+        userId: userData?.id || null
+      });
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          email: passedGuestEmail || userData?.email,
+          phoneNumber: phoneNumber,
+          network: pendingPurchase.network,
+          capacity: parseInt(pendingPurchase.capacity),
+          price: parseFloat(pendingPurchase.price),
+          userId: userData?.id || null
+        })
+      });
+
+      console.log('✅ Response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        console.error('❌ Error response:', errorData);
+        throw new Error(errorData.message || `HTTP ${response.status}`);
+      }
+
+      const data = await response.json();
+
+      if (data.status === 'success' && data.data?.paymentUrl) {
+        showToast('✅ Redirecting to payment page...', 'success');
+        setSelectedBundle('');
+        setPhoneNumber('');
+        setIsPurchaseModalOpen(false);
+        setPendingPurchase(null);
+        setGuestEmail('');
+        setIsLoading(false);
+        
+        // Redirect to Paystack
+        window.location.href = data.data.paymentUrl;
+      } else {
+        throw new Error(data.message || 'Payment initialization failed');
+      }
+
+    } catch (error) {
+      console.error('💥 Purchase error:', error);
+      const errorMessage = error.message || 'Purchase failed. Please try again.';
+      setError(errorMessage);
+      showToast(errorMessage, 'error');
+      setIsLoading(false);
+    }
+  };
+
   const handleWalletPayment = (passedGuestEmail = null) => {
     if (passedGuestEmail) {
       setGuestEmail(passedGuestEmail);
@@ -435,130 +389,6 @@ const MTNBundleSelect = () => {
     processPurchase('paystack', passedGuestEmail);
   };
 
-  const processPurchase = async (paymentMethod, passedGuestEmail = null) => {
-    if (!pendingPurchase) return;
-    
-    const isGuest = !userData || !userData.id;
-    
-    setIsLoading(true);
-    setError('');
-
-    try {
-      const API_BASE = 'https://datanest-lkyu.onrender.com/api/v1/data';
-      
-      // ===== GUEST USER - Always use Paystack =====
-      if (isGuest) {
-        const response = await fetch(`${API_BASE}/paystack-initialize`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            email: passedGuestEmail,
-            phoneNumber: phoneNumber,
-            network: pendingPurchase.network,
-            capacity: parseInt(pendingPurchase.capacity),
-            price: parseFloat(pendingPurchase.price),
-            userId: null
-          })
-        });
-
-        const data = await response.json();
-
-        if (response.ok && data.status === 'success') {
-          showToast('Redirecting to payment page...', 'success');
-          setSelectedBundle('');
-          setPhoneNumber('');
-          setIsPurchaseModalOpen(false);
-          setPendingPurchase(null);
-          setGuestEmail('');
-          window.location.href = data.data.paymentUrl;
-        } else {
-          throw new Error(data.message || 'Payment initialization failed');
-        }
-        return;
-      }
-
-      // ===== LOGGED-IN USER =====
-      const token = localStorage.getItem('authToken');
-
-      // If user selected WALLET
-      if (paymentMethod === 'wallet') {
-        const purchaseResponse = await fetch(`${API_BASE}/purchase-data`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${token}`
-          },
-          body: JSON.stringify({
-            userId: userData.id,
-            phoneNumber: phoneNumber,
-            network: pendingPurchase.network,
-            capacity: parseInt(pendingPurchase.capacity),
-            price: parseFloat(pendingPurchase.price)
-          })
-        });
-
-        const purchaseData = await purchaseResponse.json();
-
-        if (purchaseResponse.ok && purchaseData.status === 'success') {
-          showToast(`✅ ${pendingPurchase.capacity}GB purchased successfully!`, 'success');
-          setSelectedBundle('');
-          setPhoneNumber('');
-          setError('');
-          setIsPurchaseModalOpen(false);
-          setPendingPurchase(null);
-          setIsLoading(false);
-        } else if (purchaseResponse.status === 400 && purchaseData.message.includes('balance')) {
-          setError('Insufficient wallet balance! Use MoMo instead.');
-          showToast('Insufficient balance - try MoMo payment', 'error');
-          setIsLoading(false);
-        } else {
-          throw new Error(purchaseData.message || 'Wallet payment failed');
-        }
-        return;
-      }
-
-      // If user selected PAYSTACK/MOMO
-      if (paymentMethod === 'paystack') {
-        const paystackResponse = await fetch(`${API_BASE}/paystack-initialize`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            email: userData.email,
-            phoneNumber: phoneNumber,
-            network: pendingPurchase.network,
-            capacity: parseInt(pendingPurchase.capacity),
-            price: parseFloat(pendingPurchase.price),
-            userId: userData.id
-          })
-        });
-
-        const paystackData = await paystackResponse.json();
-
-        if (paystackResponse.ok && paystackData.status === 'success') {
-          showToast('Redirecting to payment page...', 'success');
-          setSelectedBundle('');
-          setPhoneNumber('');
-          setIsPurchaseModalOpen(false);
-          setPendingPurchase(null);
-          window.location.href = paystackData.data.paymentUrl;
-        } else {
-          throw new Error(paystackData.message || 'Payment initialization failed');
-        }
-      }
-
-    } catch (error) {
-      console.error('Purchase error:', error);
-      const errorMessage = error.message || 'Purchase failed. Please try again.';
-      setError(errorMessage);
-      showToast(errorMessage, 'error');
-      setIsLoading(false);
-    }
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800 py-8 px-4">
       {toast.visible && (
@@ -569,17 +399,7 @@ const MTNBundleSelect = () => {
         />
       )}
       
-      <LoadingOverlay isLoading={isLoading} />
-      
       <div className="max-w-4xl mx-auto">
-        <ServiceInfoModal 
-          isOpen={isModalOpen}
-          onClose={() => setIsModalOpen(false)}
-          onConfirm={() => {
-            setIsModalOpen(false);
-          }}
-        />
-
         <PurchaseModal
           isOpen={isPurchaseModalOpen}
           onClose={() => {
@@ -609,9 +429,6 @@ const MTNBundleSelect = () => {
             </h1>
           </div>
           <p className="text-slate-600 dark:text-slate-400 text-lg font-semibold">Non-Expiry Data Packages</p>
-          {userData && userData.id && (
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">Welcome back! Pay with wallet or MoMo</p>
-          )}
         </div>
 
         <div className="bg-white dark:bg-slate-800 rounded-xl shadow-xl border border-slate-200 dark:border-slate-700 overflow-hidden">
@@ -626,14 +443,6 @@ const MTNBundleSelect = () => {
                   <p className="text-white/90 text-sm">Choose data size and purchase instantly</p>
                 </div>
               </div>
-              
-              <button
-                onClick={() => setIsModalOpen(true)}
-                className="flex items-center space-x-2 px-4 py-2 bg-white/20 backdrop-blur-sm text-white font-semibold rounded-lg border border-white/30 hover:bg-white/30 transition-all"
-              >
-                <Info size={16} strokeWidth={2} />
-                <span className="text-sm">Service Info</span>
-              </button>
             </div>
           </div>
 
