@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
 
 const FloatingWhatsAppIcon = () => {
-  const whatsappGroupUrl = 'https://chat.whatsapp.com/Kx1mSPCE3Gz8I9FQtxikP4?mode=ems_copy_t';
+  const whatsappGroupUrl = 'https://chat.whatsapp.com/LPx71J9LiXj8P9T7LbqgF2?mode=wwt';
   const [showIcon, setShowIcon] = useState(false);
   
   useEffect(() => {
