@@ -197,6 +197,7 @@ const PurchaseModal = ({ isOpen, onClose, bundle, phoneNumber, setPhoneNumber, o
                 onClick={handleWalletClick}
                 disabled={isLoading || !validateForm()}
                 className="py-3 px-4 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:shadow-xl"
+                title="Pay from your wallet balance"
               >
                 {isLoading ? (
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -216,6 +217,7 @@ const PurchaseModal = ({ isOpen, onClose, bundle, phoneNumber, setPhoneNumber, o
               className={`py-3 px-4 bg-gradient-to-r from-orange-500 to-amber-600 hover:from-orange-600 hover:to-amber-700 text-white font-bold rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center shadow-lg hover:shadow-xl ${
                 isGuest ? 'col-span-2' : 'col-span-1'
               }`}
+              title="Pay with MTN MoMo"
             >
               {isLoading ? (
                 <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -308,37 +310,49 @@ const MTNBundleSelect = () => {
     if (!pendingPurchase) return;
     
     const isGuest = !userData || !userData.id;
-    
     setIsLoading(true);
     setError('');
 
     try {
-      // ========== ALL REQUESTS USE SAME API_BASE ==========
-      const url = `${API_BASE}/paystack-initialize`;
+      let url;
+      let payload;
 
-      console.log('📤 Sending request to:', url);
-      console.log('📋 Payload:', {
-        email: passedGuestEmail || userData?.email,
-        phoneNumber: phoneNumber,
-        network: pendingPurchase.network,
-        capacity: parseInt(pendingPurchase.capacity),
-        price: parseFloat(pendingPurchase.price),
-        userId: userData?.id || null
-      });
+      if (paymentMethod === 'wallet' && !isGuest) {
+        // Use wallet purchase endpoint for authenticated users
+        url = `${API_BASE}/purchase-data`;
+        payload = {
+          userId: userData.id,
+          phoneNumber: phoneNumber,
+          network: pendingPurchase.network,
+          capacity: parseInt(pendingPurchase.capacity),
+          price: parseFloat(pendingPurchase.price)
+        };
 
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
+        console.log('📤 Sending WALLET request to:', url);
+        console.log('📋 Payload:', payload);
+
+      } else {
+        // Use Paystack for guests or MoMo payment
+        url = `${API_BASE}/paystack-initialize`;
+        payload = {
           email: passedGuestEmail || userData?.email,
           phoneNumber: phoneNumber,
           network: pendingPurchase.network,
           capacity: parseInt(pendingPurchase.capacity),
           price: parseFloat(pendingPurchase.price),
           userId: userData?.id || null
-        })
+        };
+
+        console.log('📤 Sending MOMO request to:', url);
+        console.log('📋 Payload:', payload);
+      }
+
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
       });
 
       console.log('✅ Response status:', response.status);
@@ -351,19 +365,48 @@ const MTNBundleSelect = () => {
 
       const data = await response.json();
 
-      if (data.status === 'success' && data.data?.paymentUrl) {
-        showToast('✅ Redirecting to payment page...', 'success');
-        setSelectedBundle('');
-        setPhoneNumber('');
-        setIsPurchaseModalOpen(false);
-        setPendingPurchase(null);
-        setGuestEmail('');
-        setIsLoading(false);
-        
-        // Redirect to Paystack
-        window.location.href = data.data.paymentUrl;
+      if (paymentMethod === 'wallet' && !isGuest) {
+        // Wallet payment successful - immediate deduction
+        if (data.status === 'success') {
+          showToast('✅ Data bundle purchased successfully!', 'success');
+          console.log('💰 Wallet deduction confirmed:', data.data);
+          
+          // Update local userData with new wallet balance
+          if (userData && data.data?.walletBalance?.current) {
+            const updatedUserData = {
+              ...userData,
+              walletBalance: data.data.walletBalance.current
+            };
+            localStorage.setItem('userData', JSON.stringify(updatedUserData));
+            setUserData(updatedUserData);
+          }
+          
+          setSelectedBundle('');
+          setPhoneNumber('');
+          setIsPurchaseModalOpen(false);
+          setPendingPurchase(null);
+          setGuestEmail('');
+          setIsLoading(false);
+        } else {
+          throw new Error(data.message || 'Wallet purchase failed');
+        }
+
       } else {
-        throw new Error(data.message || 'Payment initialization failed');
+        // Paystack/MoMo payment - redirect to payment page
+        if (data.status === 'success' && data.data?.paymentUrl) {
+          showToast('✅ Redirecting to payment page...', 'success');
+          setSelectedBundle('');
+          setPhoneNumber('');
+          setIsPurchaseModalOpen(false);
+          setPendingPurchase(null);
+          setGuestEmail('');
+          setIsLoading(false);
+          
+          // Redirect to Paystack
+          window.location.href = data.data.paymentUrl;
+        } else {
+          throw new Error(data.message || 'Payment initialization failed');
+        }
       }
 
     } catch (error) {
@@ -376,6 +419,11 @@ const MTNBundleSelect = () => {
   };
 
   const handleWalletPayment = (passedGuestEmail = null) => {
+    if (!userData || !userData.id) {
+      showToast('⚠️ Wallet payment is only available for registered users. Please log in or use MoMo.', 'error');
+      return;
+    }
+    
     if (passedGuestEmail) {
       setGuestEmail(passedGuestEmail);
     }
@@ -487,6 +535,25 @@ const MTNBundleSelect = () => {
                 </div>
               </div>
             </div>
+
+            {userData && userData.id && (
+              <div className="mt-6 p-5 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl">
+                <div className="flex items-start">
+                  <div className="p-2 bg-blue-100 dark:bg-blue-900/30 rounded-lg mr-3 flex-shrink-0">
+                    <Wallet className="w-5 h-5 text-blue-600 dark:text-blue-400" strokeWidth={2} />
+                  </div>
+                  <div>
+                    <h4 className="text-base font-bold text-blue-900 dark:text-blue-300 mb-1">Wallet Payment Available</h4>
+                    <p className="text-blue-800 dark:text-blue-400 text-sm font-medium">
+                      Your wallet balance: <span className="font-bold text-blue-600 dark:text-blue-300">GH₵{(userData.walletBalance || 0).toFixed(2)}</span>
+                    </p>
+                    <p className="text-blue-700 dark:text-blue-400 text-xs font-medium mt-1">
+                      Use Wallet for instant purchases, or MoMo to add funds
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
